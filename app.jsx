@@ -1,7 +1,5 @@
 const { useState, useEffect } = React;
 const { Clock, Calendar, TrendingDown, Droplet, Apple, Play, Square, CheckCircle, Circle } = lucide;
-const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = Recharts;
-
 
 const FastTrack = () => {
   const [fastingState, setFastingState] = useState(null); // { startTime, endTime }
