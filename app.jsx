@@ -1,5 +1,15 @@
 const { useState, useEffect } = React;
-const { Clock, Calendar, TrendingDown, Droplet, Apple, Play, Square, CheckCircle, Circle } = lucide;
+
+// Crea componenti React dagli elementi Lucide
+const Clock = (props) => React.createElement(lucide.Clock, props);
+const Calendar = (props) => React.createElement(lucide.Calendar, props);
+const TrendingDown = (props) => React.createElement(lucide.TrendingDown, props);
+const Droplet = (props) => React.createElement(lucide.Droplet, props);
+const Apple = (props) => React.createElement(lucide.Apple, props);
+const Play = (props) => React.createElement(lucide.Play, props);
+const Square = (props) => React.createElement(lucide.Square, props);
+const CheckCircle = (props) => React.createElement(lucide.CheckCircle, props);
+const Circle = (props) => React.createElement(lucide.Circle, props);
 
 const FastTrack = () => {
   const [fastingState, setFastingState] = useState(null); // { startTime, endTime }
