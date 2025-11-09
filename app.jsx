@@ -96,7 +96,13 @@ const FastTrack = () => {
   const [cheatMeals, setCheatMeals] = useState([]);
   const [cheatType, setCheatType] = useState('dolce');
   const [cheatDescription, setCheatDescription] = useState('');
-  const [dailyTracking, setDailyTracking] = useState({}); // {date: {hydration: 4, nutrition: true, fasting: true, cheat: true}}
+  const [dailyTracking, setDailyTracking] = useState({}); // {date: {hydration: 4, nutrition: true, fasting: true, cheat: true, activity: true}}
+
+  // Physical Activity tracking
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [physicalActivities, setPhysicalActivities] = useState([]);
+  const [activityType, setActivityType] = useState('Camminata');
+  const [activityCalories, setActivityCalories] = useState('');
 
   const phases = [
     {
@@ -198,6 +204,7 @@ const FastTrack = () => {
       if (data.customFoods) setCustomFoods(data.customFoods);
       if (data.cheatMeals) setCheatMeals(data.cheatMeals);
       if (data.foodLists) setFoodLists(data.foodLists);
+      if (data.physicalActivities) setPhysicalActivities(data.physicalActivities);
     }
     
     // Load today's hydration
@@ -219,9 +226,10 @@ const FastTrack = () => {
       selectedFoods,
       customFoods,
       cheatMeals,
-      foodLists
+      foodLists,
+      physicalActivities
     }));
-  }, [fastingState, currentWeight, weightHistory, fastingHistory, dailyTracking, selectedFoods, customFoods, cheatMeals, foodLists]);
+  }, [fastingState, currentWeight, weightHistory, fastingHistory, dailyTracking, selectedFoods, customFoods, cheatMeals, foodLists, physicalActivities]);
 
   useEffect(() => {
     if (!fastingState) return;
@@ -324,13 +332,14 @@ const FastTrack = () => {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
       const hasFasting = fastingHistory.some(f => f.date === dateStr && f.completed);
       const tracking = dailyTracking[dateStr] || {};
-      days.push({ 
-        day: i, 
-        date: dateStr, 
+      days.push({
+        day: i,
+        date: dateStr,
         hasFasting,
         hydration: tracking.hydration || 0,
         nutrition: tracking.nutrition || false,
-        cheat: tracking.cheat || false
+        cheat: tracking.cheat || false,
+        activity: tracking.activity || false
       });
     }
     return days;
@@ -462,6 +471,48 @@ const FastTrack = () => {
 
   const getDayCheats = (date) => {
     return cheatMeals.filter(c => c.date === date);
+  };
+
+  const getDayActivities = (date) => {
+    return physicalActivities.filter(a => a.date === date);
+  };
+
+  const getTodayActivityCount = () => {
+    const today = new Date().toISOString().split('T')[0];
+    return physicalActivities.filter(a => a.date === today).length;
+  };
+
+  const getTodayTotalCalories = () => {
+    const today = new Date().toISOString().split('T')[0];
+    return physicalActivities
+      .filter(a => a.date === today)
+      .reduce((sum, a) => sum + (a.calories || 0), 0);
+  };
+
+  const saveActivity = () => {
+    if (!activityCalories || isNaN(activityCalories) || activityCalories <= 0) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const newActivity = {
+      id: Date.now(),
+      date: today,
+      time: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+      type: activityType.trim() || 'Camminata',
+      calories: parseInt(activityCalories)
+    };
+
+    setPhysicalActivities([...physicalActivities, newActivity]);
+    setDailyTracking({
+      ...dailyTracking,
+      [today]: {
+        ...dailyTracking[today],
+        activity: true
+      }
+    });
+
+    setActivityCalories('');
+    setActivityType('Camminata');
+    setShowActivityModal(false);
   };
 
   const renderDashboard = () => (
@@ -638,6 +689,40 @@ const FastTrack = () => {
         </button>
       </div>
 
+      {/* Attività Fisica */}
+      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-1">Attività Fisica</h3>
+            <p className="text-sm text-gray-600">
+              {getTodayActivityCount() === 0
+                ? 'Nessuna attività oggi. Inizia a muoverti! 🏃'
+                : `${getTodayActivityCount()} attività • ${getTodayTotalCalories()} cal bruciate`}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowActivityModal(true)}
+            className="bg-purple-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-purple-600 transition-colors shadow-md"
+          >
+            Registra Attività
+          </button>
+        </div>
+        {getTodayActivityCount() > 0 && (
+          <div className="mt-3 space-y-2">
+            {physicalActivities.filter(a => a.date === new Date().toISOString().split('T')[0]).map((activity) => (
+              <div key={activity.id} className="bg-white/60 rounded-xl p-3 text-sm">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">💪</span>
+                  <span className="font-medium text-gray-900">{activity.type}</span>
+                  <span className="text-gray-500">• {activity.time}</span>
+                </div>
+                <div className="text-gray-700 pl-7">{activity.calories} calorie bruciate</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Sgarro Alimentare */}
       <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl p-6 shadow-sm">
         <div className="flex items-center justify-between mb-3">
@@ -755,6 +840,7 @@ const FastTrack = () => {
                     <div className="flex gap-1">
                       {day.hydration >= 4 && <span className="text-xs">💧</span>}
                       {day.nutrition && <span className="text-xs">🍎</span>}
+                      {day.activity && <span className="text-xs">💪</span>}
                       {day.cheat && <span className="text-xs">🍕</span>}
                     </div>
                   </>
@@ -775,6 +861,10 @@ const FastTrack = () => {
             <div className="flex items-center gap-2">
               <span className="text-lg">🍎</span>
               <span className="text-gray-700">Nutrizione</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">💪</span>
+              <span className="text-gray-700">Attività</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-lg">🍕</span>
@@ -801,9 +891,21 @@ const FastTrack = () => {
                   {Object.values(dailyTracking).filter(d => d.hydration >= 4).length}
                 </div>
               </div>
+              <div className="bg-pink-50 rounded-xl p-4">
+                <div className="text-sm text-gray-600 mb-1">Giorni Attivi</div>
+                <div className="text-2xl font-semibold text-gray-900">
+                  {Object.values(dailyTracking).filter(d => d.activity).length}
+                </div>
+              </div>
               <div className="bg-orange-50 rounded-xl p-4">
                 <div className="text-sm text-gray-600 mb-1">Sgarri Totali</div>
                 <div className="text-2xl font-semibold text-gray-900">{cheatMeals.length}</div>
+              </div>
+              <div className="bg-purple-50 rounded-xl p-4">
+                <div className="text-sm text-gray-600 mb-1">Calorie Totali</div>
+                <div className="text-2xl font-semibold text-gray-900">
+                  {physicalActivities.reduce((sum, a) => sum + (a.calories || 0), 0)}
+                </div>
               </div>
             </div>
           </div>
@@ -1139,6 +1241,36 @@ const FastTrack = () => {
                 )}
               </div>
 
+              {/* Attività Fisica */}
+              <div className={`rounded-2xl p-4 ${selectedDay.activity ? 'bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200' : 'bg-gray-50'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl">💪</span>
+                  <h4 className="font-semibold text-gray-900">Attività Fisica</h4>
+                </div>
+                {getDayActivities(selectedDay.date).length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {getDayActivities(selectedDay.date).map((activity) => (
+                      <div key={activity.id} className="bg-white/60 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">{activity.type}</span>
+                            <span className="text-xs text-gray-500">• {activity.time}</span>
+                          </div>
+                          <span className="text-sm font-bold text-purple-600">{activity.calories} cal</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="bg-white/60 rounded-lg p-2 mt-2">
+                      <div className="text-sm font-semibold text-purple-900">
+                        Totale: {getDayActivities(selectedDay.date).reduce((sum, a) => sum + (a.calories || 0), 0)} calorie bruciate
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-700">Nessuna attività registrata</p>
+                )}
+              </div>
+
               {/* Sgarri */}
               <div className={`rounded-2xl p-4 ${selectedDay.cheat ? 'bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200' : 'bg-gray-50'}`}>
                 <div className="flex items-center gap-2 mb-2">
@@ -1256,6 +1388,81 @@ const FastTrack = () => {
                 className="flex-1 bg-orange-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-orange-600 transition-colors"
               >
                 Salva Sgarro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Activity Modal */}
+      {showActivityModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">💪</span>
+                <h3 className="text-xl font-semibold text-gray-900">Registra Attività</h3>
+              </div>
+              <button
+                onClick={() => setShowActivityModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-6 text-sm text-purple-900">
+              <strong>Ottimo lavoro!</strong> Registra la tua attività fisica per tenere traccia delle calorie bruciate! 🔥
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Tipo di Attività</label>
+                <select
+                  value={activityType}
+                  onChange={(e) => setActivityType(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  <option value="Camminata">Camminata</option>
+                  <option value="Corsa">Corsa</option>
+                  <option value="Bici">Bici</option>
+                  <option value="Nuoto">Nuoto</option>
+                  <option value="Palestra">Palestra</option>
+                  <option value="Yoga">Yoga</option>
+                  <option value="Pilates">Pilates</option>
+                  <option value="Calcio">Calcio</option>
+                  <option value="Tennis">Tennis</option>
+                  <option value="Escursione">Escursione</option>
+                  <option value="Altro">Altro</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Calorie Bruciate</label>
+                <input
+                  type="number"
+                  value={activityCalories}
+                  onChange={(e) => setActivityCalories(e.target.value)}
+                  placeholder="es. 200"
+                  min="1"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+                <div className="text-xs text-gray-500 mt-1">Inserisci il numero di calorie bruciate</div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowActivityModal(false)}
+                className="flex-1 bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={saveActivity}
+                className="flex-1 bg-purple-500 text-white px-6 py-3 rounded-xl font-medium hover:bg-purple-600 transition-colors"
+              >
+                Salva Attività
               </button>
             </div>
           </div>
