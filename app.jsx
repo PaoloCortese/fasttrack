@@ -61,10 +61,8 @@ const FastTrack = () => {
   const [fastingState, setFastingState] = useState(null); // { startTime, endTime }
   const [currentPhase, setCurrentPhase] = useState(0);
   const [timeElapsed, setTimeElapsed] = useState(0);
-  const [currentWeight, setCurrentWeight] = useState(75);
-  const [weightHistory, setWeightHistory] = useState([
-    { week: 'Sett 1', weight: 75, date: '2024-11-03' },
-  ]);
+  const [currentWeight, setCurrentWeight] = useState(0);
+  const [weightHistory, setWeightHistory] = useState([]);
   const [fastingHistory, setFastingHistory] = useState([]);
   const [showWeightInput, setShowWeightInput] = useState(false);
   const [newWeight, setNewWeight] = useState('');
@@ -522,19 +520,25 @@ const FastTrack = () => {
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="text-sm text-gray-600 mb-1">Peso Attuale</div>
-            <div className="text-4xl font-semibold text-gray-900">{currentWeight} kg</div>
-            <div className="text-sm text-gray-600 mt-2">
-              Totale: <span className={getWeightChange() < 0 ? 'text-green-600 font-medium' : 'text-gray-900'}>{getWeightChange()} kg</span>
-              {weightHistory.length > 1 && (
-                <> • Settimana: <span className={getWeeklyChange() < 0 ? 'text-green-600 font-medium' : 'text-gray-900'}>{getWeeklyChange()} kg</span></>
-              )}
-            </div>
+            {currentWeight > 0 ? (
+              <>
+                <div className="text-4xl font-semibold text-gray-900">{currentWeight} kg</div>
+                <div className="text-sm text-gray-600 mt-2">
+                  Totale: <span className={getWeightChange() < 0 ? 'text-green-600 font-medium' : 'text-gray-900'}>{getWeightChange()} kg</span>
+                  {weightHistory.length > 1 && (
+                    <> • Settimana: <span className={getWeeklyChange() < 0 ? 'text-green-600 font-medium' : 'text-gray-900'}>{getWeeklyChange()} kg</span></>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="text-2xl font-semibold text-gray-500">Inserisci il tuo peso iniziale</div>
+            )}
           </div>
           <button
             onClick={() => setShowWeightInput(!showWeightInput)}
             className="bg-white px-4 py-2 rounded-xl text-sm font-medium text-gray-700 shadow-sm hover:shadow-md transition-all"
           >
-            Aggiorna Peso
+            {currentWeight > 0 ? 'Aggiorna Peso' : 'Inserisci Peso'}
           </button>
         </div>
         
