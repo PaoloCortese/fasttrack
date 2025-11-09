@@ -1183,6 +1183,7 @@ const FastTrack = () => {
                       {type.charAt(0).toUpperCase() + type.slice(1)}
                     </button>
                   ))}
+                </div>
               </div>
 
               <div>
