@@ -1,5 +1,6 @@
 const { useState, useEffect } = React;
 
+// FastTrack 16/8 - Intermittent Fasting Tracker
 // Componenti icone SVG inline (fallback se Lucide non funziona)
 const Clock = ({ className = "w-6 h-6" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
