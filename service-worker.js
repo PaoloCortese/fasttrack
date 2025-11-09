@@ -1,8 +1,8 @@
 const CACHE_NAME = 'fasttrack-v1';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json'
+  '/fasttrack/',
+  '/fasttrack/index.html',
+  '/fasttrack/manifest.json'
 ];
 
 // Install event

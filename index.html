@@ -12,13 +12,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="FastTrack">
-    <link rel="apple-touch-icon" href="icons/icon-180x180.png">
+    <link rel="apple-touch-icon" href="/fasttrack/icons/icon-180x180.png">
 
     <title>FastTrack 16/8</title>
 
     <!-- Manifest -->
-    <link rel="manifest" href="manifest.json">
-    <link rel="icon" type="image/png" href="icons/icon-192x192.png">
+    <link rel="manifest" href="/fasttrack/manifest.json">
+    <link rel="icon" type="image/png" href="/fasttrack/icons/icon-192x192.png">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -43,7 +43,7 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
+                navigator.serviceWorker.register('/fasttrack/service-worker.js')
                     .then(reg => console.log('Service Worker registrato'))
                     .catch(err => console.error('Errore registrazione Service Worker:', err));
             });

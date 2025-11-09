@@ -2,26 +2,27 @@
   "name": "FastTrack 16/8",
   "short_name": "FastTrack",
   "description": "Tracker per digiuno intermittente 16/8",
-  "start_url": "/",
+  "start_url": "/fasttrack/",
+  "scope": "/fasttrack/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#3b82f6",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "icons/icon-192x192.png",
+      "src": "/fasttrack/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-512x512.png",
+      "src": "/fasttrack/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icons/icon-180x180.png",
+      "src": "/fasttrack/icons/icon-180x180.png",
       "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
