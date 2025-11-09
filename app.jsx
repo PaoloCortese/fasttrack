@@ -854,7 +854,27 @@ const FastTrack = () => {
                 <div className="text-sm text-gray-600">{entry.week}</div>
                 <div className="text-xs text-gray-500">{new Date(entry.date).toLocaleDateString('it-IT')}</div>
               </div>
-              <div className="text-2xl font-bold text-gray-900">{entry.weight} kg</div>
+              <div className="flex items-center gap-3">
+                <div className="text-2xl font-bold text-gray-900">{entry.weight} kg</div>
+                {idx === 0 && (
+                  <button
+                    onClick={() => {
+                      const newInitialWeight = prompt('Inserisci il peso iniziale (kg):', entry.weight);
+                      if (newInitialWeight && !isNaN(newInitialWeight) && newInitialWeight > 0) {
+                        const updatedHistory = [...weightHistory];
+                        updatedHistory[0] = { ...updatedHistory[0], weight: parseFloat(newInitialWeight) };
+                        setWeightHistory(updatedHistory);
+                        if (weightHistory.length === 1) {
+                          setCurrentWeight(parseFloat(newInitialWeight));
+                        }
+                      }
+                    }}
+                    className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+                  >
+                    Modifica
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
