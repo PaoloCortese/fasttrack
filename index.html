@@ -3,101 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="FastTrack - Progressive Web App">
-    <meta name="theme-color" content="#2196F3">
-    <title>FastTrack</title>
+
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="Tracker per digiuno intermittente 16/8">
+    <meta name="theme-color" content="#3b82f6">
+
+    <!-- iOS Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="FastTrack">
+    <link rel="apple-touch-icon" href="icons/icon-180x180.png">
+
+    <title>FastTrack 16/8</title>
+
+    <!-- Manifest -->
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icons/icon-192x192.png">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: white;
-        }
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
 
-        .container {
-            text-align: center;
-            padding: 2rem;
-        }
+    <!-- React 18 and ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 
-        h1 {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
+    <!-- Babel Standalone -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-        p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
+    <!-- Recharts -->
+    <script src="https://unpkg.com/recharts@2.5.0/dist/Recharts.js"></script>
 
-        .install-prompt {
-            margin-top: 2rem;
-            padding: 1rem 2rem;
-            background: rgba(255, 255, 255, 0.2);
-            border: 2px solid white;
-            border-radius: 50px;
-            color: white;
-            font-size: 1rem;
-            cursor: pointer;
-            display: none;
-        }
-
-        .install-prompt:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-    </style>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>FastTrack</h1>
-        <p>La tua Progressive Web App</p>
-        <button class="install-prompt" id="installBtn">Installa App</button>
-    </div>
+    <div id="root"></div>
 
+    <!-- Service Worker Registration -->
     <script>
-        // Registrazione del Service Worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/service-worker.js')
-                    .then(reg => console.log('Service Worker registrato:', reg))
+                    .then(reg => console.log('Service Worker registrato'))
                     .catch(err => console.error('Errore registrazione Service Worker:', err));
             });
         }
-
-        // Gestione prompt di installazione
-        let deferredPrompt;
-        const installBtn = document.getElementById('installBtn');
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            installBtn.style.display = 'inline-block';
-        });
-
-        installBtn.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                console.log(`Scelta utente: ${outcome}`);
-                deferredPrompt = null;
-                installBtn.style.display = 'none';
-            }
-        });
-
-        window.addEventListener('appinstalled', () => {
-            console.log('PWA installata con successo');
-            deferredPrompt = null;
-        });
     </script>
+
+    <!-- React App Code -->
+    <script type="text/babel" src="app.jsx"></script>
 </body>
 </html>

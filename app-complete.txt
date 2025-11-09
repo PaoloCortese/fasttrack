@@ -1,0 +1,14 @@
+Dato che il codice è troppo lungo per essere inserito inline, ti consiglio questo approccio:
+
+1. Il codice React è già nel file `fasttrack-16-8.tsx`
+2. Per usarlo con i CDN, dobbiamo:
+   - Rimuovere le import statements
+   - Usare le variabili globali da CDN (React, ReactDOM, Recharts, lucide)
+   - Adattare per Babel standalone
+
+Vuoi che:
+A) Creo un file JS separato ottimizzato per CDN
+B) Lo inserisco direttamente nell'HTML (potrebbe essere molto lungo)
+C) Uso un approccio ibrido con caricamento dinamico
+
+Quale preferisci?
