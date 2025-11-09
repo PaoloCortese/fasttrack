@@ -61,8 +61,12 @@ const FastTrack = () => {
   const [fastingState, setFastingState] = useState(null); // { startTime, endTime }
   const [currentPhase, setCurrentPhase] = useState(0);
   const [timeElapsed, setTimeElapsed] = useState(0);
-  const [currentWeight, setCurrentWeight] = useState(0);
-  const [weightHistory, setWeightHistory] = useState([]);
+  const [currentWeight, setCurrentWeight] = useState(88);
+  const [weightHistory, setWeightHistory] = useState([{
+    week: 'Sett 1',
+    weight: 88,
+    date: new Date().toISOString().split('T')[0]
+  }]);
   const [fastingHistory, setFastingHistory] = useState([]);
   const [showWeightInput, setShowWeightInput] = useState(false);
   const [newWeight, setNewWeight] = useState('');
