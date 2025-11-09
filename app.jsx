@@ -628,25 +628,16 @@ const FastTrack = () => {
           <h2 className="text-xl font-semibold text-gray-900">Progressi Peso</h2>
         </div>
 
-        <div className="h-64 mb-6">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={weightHistory}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="week" stroke="#666" />
-              <YAxis stroke="#666" domain={['auto', 'auto']} />
-              <Tooltip 
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="weight" 
-                stroke="#3b82f6" 
-                strokeWidth={3}
-                dot={{ fill: '#3b82f6', r: 5 }}
-                activeDot={{ r: 7 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+        <div className="space-y-3 mb-6">
+          {weightHistory.map((entry, idx) => (
+            <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+              <div>
+                <div className="text-sm text-gray-600">{entry.week}</div>
+                <div className="text-xs text-gray-500">{new Date(entry.date).toLocaleDateString('it-IT')}</div>
+              </div>
+              <div className="text-2xl font-bold text-gray-900">{entry.weight} kg</div>
+            </div>
+          ))}
         </div>
 
         <div className="grid grid-cols-3 gap-4">
