@@ -102,6 +102,11 @@ const FastTrack = () => {
   const [activityType, setActivityType] = useState('Camminata');
   const [activityCalories, setActivityCalories] = useState('');
 
+  // Calendar navigation and view
+  const [calendarView, setCalendarView] = useState('week'); // 'week' or 'month'
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
   const phases = [
     {
       id: 1,
@@ -316,14 +321,14 @@ const FastTrack = () => {
   };
 
   const getMonthDays = () => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth();
+    const year = selectedYear;
+    const month = selectedMonth;
     const firstDay = new Date(year, month, 1).getDay();
+    const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1; // Lunedì = 0
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
+
     const days = [];
-    for (let i = 0; i < firstDay; i++) {
+    for (let i = 0; i < adjustedFirstDay; i++) {
       days.push(null);
     }
     for (let i = 1; i <= daysInMonth; i++) {
@@ -341,6 +346,77 @@ const FastTrack = () => {
       });
     }
     return days;
+  };
+
+  const getWeekDays = () => {
+    const today = new Date();
+    const currentDay = today.getDay();
+    const diff = currentDay === 0 ? -6 : 1 - currentDay; // Lunedì come inizio settimana
+
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + diff);
+
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
+      const dateStr = date.toISOString().split('T')[0];
+      const hasFasting = fastingHistory.some(f => f.date === dateStr && f.completed);
+      const tracking = dailyTracking[dateStr] || {};
+
+      days.push({
+        day: date.getDate(),
+        date: dateStr,
+        hasFasting,
+        hydration: tracking.hydration || 0,
+        nutrition: tracking.nutrition || false,
+        cheat: tracking.cheat || false,
+        activity: tracking.activity || false,
+        isToday: dateStr === today.toISOString().split('T')[0]
+      });
+    }
+    return days;
+  };
+
+  const getDayColor = (day) => {
+    if (!day) return '';
+
+    // Conta le attività completate
+    let completedCount = 0;
+    if (day.hasFasting) completedCount++;
+    if (day.hydration >= 4) completedCount++;
+    if (day.nutrition) completedCount++;
+    if (day.activity) completedCount++;
+
+    // Se c'è uno sgarro, priorità al rosso
+    if (day.cheat) {
+      return 'bg-gradient-to-br from-red-400 to-red-500 text-white';
+    }
+
+    // Altrimenti colora in base alle attività completate
+    if (completedCount === 4) {
+      return 'bg-gradient-to-br from-green-400 to-emerald-500 text-white';
+    } else if (completedCount >= 2) {
+      return 'bg-gradient-to-br from-orange-400 to-orange-500 text-white';
+    } else {
+      return 'bg-gray-50 text-gray-900';
+    }
+  };
+
+  const navigateMonth = (direction) => {
+    let newMonth = selectedMonth + direction;
+    let newYear = selectedYear;
+
+    if (newMonth > 11) {
+      newMonth = 0;
+      newYear++;
+    } else if (newMonth < 0) {
+      newMonth = 11;
+      newYear--;
+    }
+
+    setSelectedMonth(newMonth);
+    setSelectedYear(newYear);
   };
 
   const updateHydration = (bottles) => {
@@ -804,75 +880,163 @@ const FastTrack = () => {
   );
 
   const renderCalendar = () => {
+    const weekDays = getWeekDays();
     const monthDays = getMonthDays();
-    const today = new Date();
-    const monthName = today.toLocaleString('it-IT', { month: 'long', year: 'numeric' });
-    
+    const monthName = new Date(selectedYear, selectedMonth).toLocaleString('it-IT', { month: 'long', year: 'numeric' });
+    const isCurrentMonth = selectedMonth === new Date().getMonth() && selectedYear === new Date().getFullYear();
+
     return (
       <div className="space-y-6">
         <div className="bg-white rounded-3xl p-6 shadow-sm">
-          <div className="flex items-center gap-3 mb-6">
-            <Calendar className="w-6 h-6 text-purple-500" />
-            <h2 className="text-xl font-semibold text-gray-900 capitalize">{monthName}</h2>
-          </div>
-
-          <div className="grid grid-cols-7 gap-2 mb-2">
-            {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map(day => (
-              <div key={day} className="text-center text-sm font-medium text-gray-600 py-2">
-                {day}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-2">
-            {monthDays.map((day, idx) => (
+          {/* Header con navigazione */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <Calendar className="w-6 h-6 text-purple-500" />
+              <h2 className="text-xl font-semibold text-gray-900 capitalize">{calendarView === 'week' ? 'Settimana' : monthName}</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              {calendarView === 'month' && (
+                <>
+                  <button
+                    onClick={() => navigateMonth(-1)}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    ←
+                  </button>
+                  {!isCurrentMonth && (
+                    <button
+                      onClick={() => {
+                        setSelectedMonth(new Date().getMonth());
+                        setSelectedYear(new Date().getFullYear());
+                      }}
+                      className="px-3 py-1 text-sm bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 transition-colors"
+                    >
+                      Oggi
+                    </button>
+                  )}
+                  <button
+                    onClick={() => navigateMonth(1)}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    →
+                  </button>
+                </>
+              )}
               <button
-                key={idx}
-                onClick={() => day && openDayDetails(day)}
-                disabled={!day}
-                className={`aspect-square rounded-xl flex flex-col items-center justify-center text-sm font-medium transition-all ${
-                  !day
-                    ? 'cursor-default'
-                    : day.hasFasting
-                    ? 'bg-gradient-to-br from-green-400 to-emerald-500 text-white shadow-md hover:shadow-lg hover:scale-105 cursor-pointer'
-                    : 'bg-gray-50 text-gray-900 hover:bg-gray-100 cursor-pointer'
-                }`}
+                onClick={() => setCalendarView(calendarView === 'week' ? 'month' : 'week')}
+                className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors ml-2"
               >
-                {day && (
-                  <>
-                    <div className="mb-1">{day.day}</div>
-                    <div className="flex gap-1">
-                      {day.hydration >= 4 && <span className="text-xs">💧</span>}
-                      {day.nutrition && <span className="text-xs">🍎</span>}
-                      {day.activity && <span className="text-xs">💪</span>}
-                      {day.cheat && <span className="text-xs">🍕</span>}
-                    </div>
-                  </>
-                )}
+                {calendarView === 'week' ? 'Mese' : 'Settimana'}
               </button>
-            ))}
+            </div>
           </div>
 
-          <div className="mt-6 flex flex-wrap items-center gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-gradient-to-br from-green-400 to-emerald-500" />
-              <span className="text-gray-700">Digiuno</span>
+          {/* Vista Settimana */}
+          {calendarView === 'week' && (
+            <>
+              <div className="grid grid-cols-7 gap-2 mb-2">
+                {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map(day => (
+                  <div key={day} className="text-center text-sm font-medium text-gray-600 py-2">
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-3">
+                {weekDays.map((day, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => openDayDetails(day)}
+                    className={`rounded-2xl p-4 flex flex-col items-center justify-center text-sm font-medium transition-all hover:shadow-lg hover:scale-105 cursor-pointer ${getDayColor(day)} ${
+                      day.isToday ? 'ring-4 ring-purple-300' : ''
+                    }`}
+                  >
+                    <div className="text-2xl font-bold mb-2">{day.day}</div>
+                    <div className="flex flex-wrap gap-1.5 justify-center">
+                      {day.hasFasting && <span className="text-lg">⏱️</span>}
+                      {day.hydration >= 4 && <span className="text-lg">💧</span>}
+                      {day.nutrition && <span className="text-lg">🍎</span>}
+                      {day.activity && <span className="text-lg">💪</span>}
+                      {day.cheat && <span className="text-lg">🍕</span>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Vista Mese */}
+          {calendarView === 'month' && (
+            <>
+              <div className="grid grid-cols-7 gap-2 mb-2">
+                {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map(day => (
+                  <div key={day} className="text-center text-sm font-medium text-gray-600 py-2">
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-2">
+                {monthDays.map((day, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => day && openDayDetails(day)}
+                    disabled={!day}
+                    className={`aspect-square rounded-xl flex items-center justify-center text-sm font-medium transition-all ${
+                      !day
+                        ? 'cursor-default'
+                        : `${getDayColor(day)} shadow-sm hover:shadow-md hover:scale-105 cursor-pointer`
+                    }`}
+                  >
+                    {day && <div>{day.day}</div>}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Legenda Colori */}
+          <div className="mt-6 space-y-3">
+            <div className="text-sm font-medium text-gray-700 mb-2">Legenda Colori</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500" />
+                <span className="text-sm text-gray-700">Tutte le attività (4/4)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-orange-400 to-orange-500" />
+                <span className="text-sm text-gray-700">Parziale (2-3/4)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-red-400 to-red-500" />
+                <span className="text-sm text-gray-700">Sgarro presente</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-gray-50 border border-gray-200" />
+                <span className="text-sm text-gray-700">Minima (0-1/4)</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">💧</span>
-              <span className="text-gray-700">Idratazione (2L+)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🍎</span>
-              <span className="text-gray-700">Nutrizione</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">💪</span>
-              <span className="text-gray-700">Attività</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🍕</span>
-              <span className="text-gray-700">Sgarro</span>
+            <div className="flex flex-wrap items-center gap-4 text-sm pt-2 border-t border-gray-100">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">⏱️</span>
+                <span className="text-gray-700">Digiuno (16h)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">💧</span>
+                <span className="text-gray-700">Idratazione (2L+)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🍎</span>
+                <span className="text-gray-700">Nutrizione</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">💪</span>
+                <span className="text-gray-700">Attività</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🍕</span>
+                <span className="text-gray-700">Sgarro</span>
+              </div>
             </div>
           </div>
 
