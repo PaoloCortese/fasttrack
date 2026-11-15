@@ -123,6 +123,45 @@
     .unita { align-self: center; color: var(--testo-2); }
     .grande-medio { font-size: 26px; font-weight: 700; margin: 10px 0 0 !important; font-variant-numeric: tabular-nums; }
     .passi { margin: 4px 0 10px; padding-left: 20px; display: grid; gap: 8px; font-size: 15px; }
+    .blocco-foto { display: grid; gap: 8px; }
+    .tasto-foto { position: relative; display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 64px; border-radius: 16px; background: var(--accento); color: var(--carta); font-size: 20px; font-weight: 750; cursor: pointer; }
+    .tasto-foto span { font-size: 26px; }
+    .tasto-foto input, .link-galleria input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+    .sotto-foto { margin: 0; text-align: center; font-size: 13px; color: var(--testo-2); }
+    .link-galleria { color: var(--accento); font-weight: 600; text-decoration: underline; cursor: pointer; position: relative; padding: 8px 2px; }
+    .fotine { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .fotine button { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; display: grid; gap: 2px; min-height: 44px; }
+    .fotine img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; border: 1px solid var(--linea); }
+    .fotine span { font-size: 12.5px; line-height: 1.25; } .fotine small { font-size: 12px; color: var(--testo-2); font-weight: 600; }
+    .consigli.solo li { margin: 0; }
+    .porzioni { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0; }
+    .porzioni button { min-height: 48px; border-radius: 12px; border: 1px solid var(--accento); background: var(--carta); color: var(--accento); font-size: 18px; font-weight: 700; cursor: pointer; }
+    .porzioni button.attivo { background: var(--accento); color: var(--carta); }
+    .fiducia { font-size: 13.5px; color: var(--testo-2); } .fiducia.bassa { color: var(--giallo); font-weight: 600; }
+    .attesa { position: relative; border-radius: 16px; overflow: hidden; margin-top: 12px; }
+    .attesa img { width: 100%; display: block; max-height: 46vh; object-fit: cover; }
+    .velo-attesa { position: absolute; inset: 0; background: rgba(0,0,0,.55); color: #fff; display: grid; place-content: center; text-align: center; padding: 16px; gap: 12px; }
+    .velo-attesa p { margin: 0; font-size: 18px; font-weight: 650; color: #fff; }
+    .barra-attesa { width: 220px; height: 6px; border-radius: 999px; background: rgba(255,255,255,.3); overflow: hidden; }
+    .barra-attesa div { height: 100%; width: 90%; background: #fff; border-radius: 999px; animation: riempi 12s ease-out; }
+    @keyframes riempi { from { width: 4%; } to { width: 90%; } }
+    @media (prefers-reduced-motion: reduce) { .barra-attesa div { animation: none; } }
+    .piccolo-bianco { font-size: 13px !important; font-weight: 400 !important; }
+    .foto-risposta { width: 96px; height: 96px; object-fit: cover; border-radius: 12px; border: 1px solid var(--linea); flex: none; }
+    .risposta-piatto { display: flex; gap: 12px; align-items: flex-start; margin-top: 12px; }
+    .desc-grande { margin: 0; font-weight: 650; } .kcal-grande { margin: 2px 0; font-size: 24px; font-weight: 750; font-variant-numeric: tabular-nums; }
+    .dopo { margin: 10px 0 0; } .nota-greg { margin: 10px 0 0; font-size: 14.5px; color: var(--testo-2); }
+    .fondo-sheet { position: sticky; bottom: calc(-20px - env(safe-area-inset-bottom)); background: var(--carta); padding: 12px 0 4px; margin-top: 8px; }
+    .link-riga { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+    .scelte { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+    .scelte li { border: 1px solid var(--linea); border-radius: 14px; padding: 12px; display: grid; gap: 6px; }
+    .scelte li.prima { border-color: var(--accento); box-shadow: 0 0 0 1px var(--accento) inset; }
+    .scelte .riga span { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .scelte .piccolo, .perche { margin: 0; } .perche { font-size: 14px; }
+    .banner-greg { width: 100%; min-height: 48px; border-radius: 12px; border: 1px solid var(--accento); background: var(--accento-chiaro); color: var(--accento); font-weight: 650; cursor: pointer; }
+    .nel-pasto { background: var(--accento-chiaro); border-radius: 12px; padding: 10px 12px; margin-top: 10px; } .nel-pasto p { margin: 0 0 8px; font-size: 14.5px; }
+    .mini-riga { width: 40px; height: 40px; object-fit: cover; border-radius: 8px; flex: none; }
+    .voci li > button:first-child { justify-content: flex-start; } .voci li > button:first-child span { flex: 1; }
     .grafico { width: 100%; height: auto; display: block; }
     .grafico .asse { font-size: 10px; fill: var(--testo-2); }
     .grafico .griglia-l { stroke: var(--linea); }

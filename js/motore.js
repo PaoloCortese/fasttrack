@@ -151,8 +151,6 @@ export function consigli(n, digiuno, adesso = new Date()) {
   if (passi != null && passi < PASSI_OBIETTIVO) {
     const mancano = PASSI_OBIETTIVO - passi;
     out.push({ tipo: 'attivita', testo: `Passi: ${kcalTxt(passi)}. Ne mancano ${kcalTxt(mancano)} a 8.000, circa ${Math.round(mancano / 110)} minuti di camminata. L'attività aumenta il deficit: non ti dà calorie in più da mangiare.` });
-  } else if (passi == null && ora >= 12) {
-    out.push({ tipo: 'attivita', testo: `Passi di oggi non ancora arrivati: arrivano col Comando rapido la sera, oppure li scrivi tu in «Attività».` });
   } else if (passi != null) {
     out.push({ tipo: 'ok', testo: `${kcalTxt(passi)} passi: obiettivo raggiunto.` });
   }

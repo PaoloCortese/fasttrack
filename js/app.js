@@ -7,7 +7,7 @@ import { html, render, useState, useEffect, useRef } from 'https://cdn.jsdelivr.
 import { auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, Bytes } from './firebase.js';
 import * as M from './motore.js';
 
-const VERSIONE = '2.0 · 15/11/2026';
+const VERSIONE = '2.1 · 15/11/2026';
 const numIt = v => { const n = Number(String(v ?? '').trim().replace(/\s/g, '').replace(',', '.')); return isFinite(n) && String(v ?? '').trim() !== '' ? n : null; };
 
 // ---------- foto del pasto: rimpicciolite sul telefono (800 px) e tenute nel diario ----------
@@ -62,34 +62,6 @@ function Login() {
 }
 
 // ---------- OGGI ----------
-function Digiuno({ stato, n, aggiorna }) {
-  const [adesso, setAdesso] = useState(Date.now());
-  const [ora, setOra] = useState('');
-  useEffect(() => { const t = setInterval(() => setAdesso(Date.now()), 30000); return () => clearInterval(t); }, []);
-  const quando = () => { // «alle 21:30» di oggi (o di ieri se è nel futuro)
-    if (!ora) return Date.now();
-    const [h, m] = ora.split(':').map(Number); const d = new Date(); d.setHours(h, m, 0, 0);
-    if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1); return d.getTime();
-  };
-  const inizia = async () => { await setDoc(doc(db, 'stato', 'digiuno'), { inizio: quando(), apertaAlle: null }); setOra(''); aggiorna(); };
-  const apri = async () => {
-    const fine = quando(); const ore = M.r1((fine - stato.inizio) / 3600000);
-    await addDoc(collection(db, 'digiuni'), { inizio: stato.inizio, fine, ore, data: M.oggiRoma(new Date(stato.inizio)), completato: ore >= M.ORE_DIGIUNO });
-    await setDoc(doc(db, 'stato', 'digiuno'), { inizio: null, apertaAlle: fine }); setOra(''); aggiorna();
-  };
-  if (stato?.inizio) {
-    const ore = (adesso - stato.inizio) / 3600000; const pct = Math.min(100, ore / M.ORE_DIGIUNO * 100);
-    const apre = new Date(stato.inizio + M.ORE_DIGIUNO * 3600000);
-    return html`<section class="card"><div class="riga"><h3>🌙 Digiuno</h3><span class="pill ${ore >= M.ORE_DIGIUNO ? 'verde' : ''}">${Math.floor(ore)} h ${String(Math.floor((ore % 1) * 60)).padStart(2, '0')} min</span></div>
-      <div class="barra"><div style=${`width:${pct}%`}></div></div>
-      <p class="piccolo">Iniziato alle ${M.oraRoma(new Date(stato.inizio))} · 16 ore alle <b>${M.oraRoma(apre)}</b></p>
-      <div class="azioni"><input class="ora" type="time" value=${ora} onInput=${e => setOra(e.target.value)} aria-label="Orario (vuoto = adesso)" /><button class="primario" onClick=${apri}>Apri la finestra</button></div></section>`;
-  }
-  return html`<section class="card"><div class="riga"><h3>🍽 Finestra aperta</h3>${stato?.apertaAlle ? html`<span class="pill">dalle ${M.oraRoma(new Date(stato.apertaAlle))}</span>` : null}</div>
-    <p class="piccolo">Quando hai finito di mangiare, fai partire il digiuno (16 ore).</p>
-    <div class="azioni"><input class="ora" type="time" value=${ora} onInput=${e => setOra(e.target.value)} aria-label="Orario (vuoto = adesso)" /><button class="primario" onClick=${inizia}>Inizia il digiuno</button></div></section>`;
-}
-
 function Budget({ n }) {
   const pct = Math.min(100, n.mangiato / n.obiettivo * 100); const oltre = n.residuo < 0;
   const [info, setInfo] = useState(false);
@@ -108,13 +80,46 @@ function Budget({ n }) {
   </section>`;
 }
 
-function Consigli({ lista }) {
-  if (!lista.length) return null;
-  const icona = { digiuno: '⏱', allarme: '⚠️', ok: '✅', info: '💡', attivita: '🚶' };
-  return html`<section class="card"><h3>Consigli</h3><ul class="consigli">${lista.map(c => html`<li class=${c.tipo}><span aria-hidden="true">${icona[c.tipo] || '•'}</span><p>${c.testo}</p></li>`)}</ul></section>`;
+function Digiuno({ stato, aggiorna }) {
+  const [adesso, setAdesso] = useState(Date.now());
+  const [ora, setOra] = useState(''); const [chiediOra, setChiediOra] = useState(false);
+  useEffect(() => { const t = setInterval(() => setAdesso(Date.now()), 30000); return () => clearInterval(t); }, []);
+  const quando = () => { // «alle 21:30» di oggi (o di ieri se è nel futuro)
+    if (!ora) return Date.now();
+    const [h, m] = ora.split(':').map(Number); const d = new Date(); d.setHours(h, m, 0, 0);
+    if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1); return d.getTime();
+  };
+  const fine = () => { setOra(''); setChiediOra(false); aggiorna(); };
+  const inizia = async () => { await setDoc(doc(db, 'stato', 'digiuno'), { inizio: quando(), apertaAlle: null }); fine(); };
+  const apri = async () => {
+    const t = quando(); const ore = M.r1((t - stato.inizio) / 3600000);
+    await addDoc(collection(db, 'digiuni'), { inizio: stato.inizio, fine: t, ore, data: M.oggiRoma(new Date(stato.inizio)), completato: ore >= M.ORE_DIGIUNO });
+    await setDoc(doc(db, 'stato', 'digiuno'), { inizio: null, apertaAlle: t }); fine();
+  };
+  const orario = chiediOra ? html`<input class="ora" type="time" value=${ora} onInput=${e => setOra(e.target.value)} aria-label="A che ora" />` : null;
+  const linkOra = !chiediOra ? html`<button class="link" onClick=${() => setChiediOra(true)}>a che ora?</button>` : null;
+  if (stato?.inizio) {
+    const ore = (adesso - stato.inizio) / 3600000; const pct = Math.min(100, ore / M.ORE_DIGIUNO * 100);
+    const apre = new Date(stato.inizio + M.ORE_DIGIUNO * 3600000);
+    return html`<section class="card"><div class="riga"><h3>🌙 Digiuno</h3><span class="pill ${ore >= M.ORE_DIGIUNO ? 'verde' : ''}">${Math.floor(ore)} h ${String(Math.floor((ore % 1) * 60)).padStart(2, '0')} min</span></div>
+      <div class="barra"><div style=${`width:${pct}%`}></div></div>
+      <p class="piccolo">Iniziato alle ${M.oraRoma(new Date(stato.inizio))} · 16 ore alle <b>${M.oraRoma(apre)}</b></p>
+      <div class="azioni">${orario}<button class="primario" onClick=${apri}>${chiediOra ? 'Aperta a quest\'ora' : 'Apro la finestra ora'}</button>${linkOra}</div></section>`;
+  }
+  return html`<section class="card"><div class="riga"><h3>🍽 Finestra aperta</h3>${stato?.apertaAlle ? html`<span class="pill">dalle ${M.oraRoma(new Date(stato.apertaAlle))}</span>` : null}</div>
+    <p class="piccolo">Quando hai finito di mangiare, fai partire le 16 ore.</p>
+    <div class="azioni">${orario}<button class="primario" onClick=${inizia}>${chiediOra ? 'Iniziato a quest\'ora' : 'Inizia il digiuno ora'}</button>${linkOra}</div></section>`;
 }
 
-// ---------- dove si prendono le calorie: banche dati vere, poi i propri cibi, Gemini solo nei casi limite ----------
+function Consiglio({ lista }) { // uno solo alla volta: il più utile
+  if (!lista.length) return null;
+  const ordine = { allarme: 0, digiuno: 1, info: 2, ok: 3, attivita: 4 };
+  const c = [...lista].sort((a, b) => (ordine[a.tipo] ?? 9) - (ordine[b.tipo] ?? 9))[0];
+  const icona = { digiuno: '⏱', allarme: '⚠️', ok: '✅', info: '💡', attivita: '🚶' };
+  return html`<ul class="consigli solo"><li class=${c.tipo}><span aria-hidden="true">${icona[c.tipo] || '•'}</span><p>${c.testo}</p></li></ul>`;
+}
+
+// ---------- dove si prendono le calorie ----------
 // Open Food Facts (gratuita, aperta, senza chiave): per nome o per codice a barre, valori dell'etichetta per 100 g.
 const OFF_CAMPI = 'product_name,brands,code,nutriments,serving_size,serving_quantity';
 function offVoce(p) {
@@ -143,7 +148,7 @@ async function offCerca(q) {
 // Numeri scritti all'italiana: «1.250» = 1250, «4,5» = 4,5
 const numTesto = s => { if (s == null) return null; const t = String(s).trim().replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'); const n = Number(t); return isFinite(n) ? n : null; };
 
-// La domanda per l'app Gemini (casi limite): risposta su UNA riga che Fast Track sa leggere.
+// Gemini incollato: l'alternativa gratuita (copia la domanda → app Gemini → incolla la riga di risposta).
 const DOMANDA_GEMINI = `Ti mando la foto del mio pasto. Stima porzioni e calorie come un nutrizionista: conta l'olio se c'è (1 cucchiaio = 90 kcal), non sottostimare pizza, fritti e dolci; per le catene (McDonald's, Burger King, KFC…) usa le tabelle nutrizionali ufficiali italiane.
 Rispondi SOLO con questa riga, senza altro testo:
 FASTTRACK | descrizione: <cosa e quanto> | kcal: <numero> | proteine: <grammi> | carboidrati: <grammi> | grassi: <grammi>`;
@@ -156,124 +161,209 @@ function leggiGemini(t) {
   return { descrizione: (d ? d[1] : 'pasto stimato da Gemini').trim().slice(0, 200), kcal: Math.round(kcal), proteine: prendi('proteine'), carboidrati: prendi('carboidrati'), grassi: prendi('grassi'), fonte: 'gemini_app' };
 }
 
-// Quanto ne hai mangiato: grammi (valori per 100 g) o pezzi (valore per pezzo).
-function Quantita({ voce, onAggiungi, onAnnulla, salvabile }) {
+// ---------- salvataggi comuni ----------
+const tondo = x => x != null && isFinite(x) ? Math.round(x) : null;
+/** Salva un pasto fatto di una o più voci. Ritorna l'id (la ricevuta). */
+async function salvaPasto(data, voci, extra = {}) {
+  const somma = k => { const v = voci.map(x => x[k]).filter(x => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0)) : null; };
+  const fonti = [...new Set(voci.map(x => x.fonte).filter(Boolean))];
+  const ref = await addDoc(collection(db, 'pasti'), { data, ora: M.oraRoma(), descrizione: voci.map(x => x.descrizione).join(' + ').slice(0, 300),
+    kcal: somma('kcal') || 0, proteine: somma('proteine'), carboidrati: somma('carboidrati'), grassi: somma('grassi'),
+    fonte: fonti.length === 1 ? fonti[0] : 'misto', aderenza: 'piano', foto: [], ts: Date.now(), origine: 'fasttrack', ...extra });
+  return ref.id;
+}
+/** Tra i miei: se c'è già (stesso nome o stesso codice a barre) aumenta l'uso, altrimenti lo aggiunge. */
+async function ricordaCibo(voce) {
+  const s = await getDocs(collection(db, 'preferiti'));
+  const nome = String(voce.nome || '').trim().toLowerCase();
+  const gia = s.docs.find(d => { const x = d.data(); return (voce.codice && x.codice === voce.codice) || String(x.nome || '').trim().toLowerCase() === nome; });
+  if (gia) { await setDoc(gia.ref, { usi: (gia.data().usi || 0) + 1, ...(voce.mini && !gia.data().mini ? { mini: voce.mini } : {}) }, { merge: true }); return; }
+  await addDoc(collection(db, 'preferiti'), { kcal100: null, prot100: null, carbo100: null, grassi100: null, kcalPezzo: null, protPezzo: null, carboPezzo: null, grassiPezzo: null, pezzo: null, porzioneG: null, codice: null, fonte: '', ...voce, usi: 1, ts: Date.now() });
+}
+function ridimensiona(dataUrl, lato, qualita) {
+  return new Promise(res => { const im = new Image(); im.onload = () => { const k = Math.min(1, lato / Math.max(im.naturalWidth, im.naturalHeight));
+    const c = document.createElement('canvas'); c.width = Math.round(im.naturalWidth * k); c.height = Math.round(im.naturalHeight * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', qualita)); };
+    im.onerror = () => res(null); im.src = dataUrl; });
+}
+const miniUrl = m => m ? `data:image/jpeg;base64,${typeof m.toBase64 === 'function' ? m.toBase64() : m}` : null;
+
+// ---------- 📷 CHIEDI A GREG: la foto va al server di AZienda (a pagamento, ~1–2 centesimi) ----------
+const URL_GREG = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'http://localhost:4321/api/fasttrack/foto' : 'https://azienda-tau.vercel.app/api/fasttrack/foto';
+async function chiediGreg(foto, tipo) {
+  const t = await auth.currentUser.getIdToken();
+  const r = await fetch(URL_GREG, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + t }, body: JSON.stringify({ images: [foto], tipo: tipo || '' }) });
+  const j = await r.json().catch(() => ({ error: 'risposta non leggibile' }));
+  if (!r.ok || j.error) throw new Error(j.error || 'errore ' + r.status);
+  return j;
+}
+const FRASI_ATTESA = ['Riconosco i cibi…', 'Stimo le porzioni…', 'Faccio i conti con quello che ti resta…'];
+const PORZIONI = [[0.5, '½'], [1, '1'], [1.5, '1½']];
+
+function Porzioni({ f, setF }) {
+  return html`<div class="porzioni" role="group" aria-label="Porzione">${PORZIONI.map(([v, t]) => html`<button class=${f === v ? 'attivo' : ''} aria-pressed=${f === v} onClick=${() => setF(v)}>${t}</button>`)}</div>`;
+}
+const Fiducia = ({ a }) => { const p = { alta: ['●●●', 'Sicuro'], media: ['●●○', 'Abbastanza sicuro'], bassa: ['●○○', 'Da verificare'] }[a] || ['●●○', 'Abbastanza sicuro'];
+  return html`<span class="fiducia ${a === 'bassa' ? 'bassa' : ''}"><span aria-hidden="true">${p[0]}</span> ${p[1]}</span>`; };
+
+function GregSheet({ greg, setGreg, n, aggiorna, onCorreggi }) {
+  const [frase, setFrase] = useState(0); const [f, setF] = useState(1); const [lavoro, setLavoro] = useState(false); const [err, setErr] = useState('');
+  useEffect(() => { if (greg.stato !== 'attesa') return; setFrase(0); const t = setInterval(() => setFrase(x => (x + 1) % FRASI_ATTESA.length), 4000); return () => clearInterval(t); }, [greg.stato, greg.ts]);
+  const chiudi = () => setGreg(g => g.stato === 'attesa' ? { ...g, aperto: false } : null);
+  const r = greg.risposta || {};
+  const residuo = n ? n.residuo : null;
+  const salvaFotoDiario = async () => { const a = await ridimensiona(greg.foto, 800, 0.72); return a ? [await salvaFoto(a)] : []; };
+  const salvaPiatto = async () => {
+    setLavoro(true); setErr('');
+    try {
+      const p = r.piatto || {}; const k = x => x != null ? Math.round(x * f) : null;
+      const desc = p.descrizione + (f !== 1 ? ` (porzione ${f === 0.5 ? '½' : '1½'})` : '');
+      const foto = await salvaFotoDiario();
+      await salvaPasto(M.oggiRoma(), [{ descrizione: desc, kcal: k(p.kcal), proteine: k(p.proteine_g), carboidrati: k(p.carboidrati_g), grassi: k(p.grassi_g), fonte: 'greg_foto' }], { foto, affidabilita: p.affidabilita || null });
+      const mini = await ridimensiona(greg.foto, 240, 0.7);
+      await ricordaCibo({ nome: p.descrizione, kcalPezzo: p.kcal, protPezzo: p.proteine_g ?? null, carboPezzo: p.carboidrati_g ?? null, grassiPezzo: p.grassi_g ?? null, pezzo: 'porzione', fonte: 'Greg (foto)', mini: mini ? Bytes.fromBase64String(mini.split(',')[1]) : null });
+      setGreg(null); aggiorna();
+    } catch (e) { setErr('Non salvato: ' + (e?.message || e)); setLavoro(false); }
+  };
+  const prendi = async s => {
+    setLavoro(true); setErr('');
+    try {
+      const foto = await salvaFotoDiario();
+      await salvaPasto(M.oggiRoma(), [{ descrizione: `${s.nome}${s.porzione ? ` (${s.porzione})` : ''}`, kcal: tondo(s.kcal), proteine: tondo(s.proteine_g), carboidrati: tondo(s.carboidrati_g), grassi: tondo(s.grassi_g), fonte: 'greg_consiglio' }], { foto });
+      setGreg(null); aggiorna();
+    } catch (e) { setErr('Non salvato: ' + (e?.message || e)); setLavoro(false); }
+  };
+  const rimanda = tipo => avviaGreg(setGreg, greg.foto, tipo);
+  let corpo;
+  if (greg.stato === 'attesa') corpo = html`<div class="attesa"><img src=${greg.foto} alt="la tua foto" /><div class="velo-attesa"><p role="status">${FRASI_ATTESA[frase]}</p><div class="barra-attesa"><div></div></div>
+      ${Date.now() - greg.ts > 20000 ? html`<p class="piccolo-bianco">Ci mette più del solito…</p>` : null}</div></div>
+    <p class="piccolo">Puoi chiudere: la risposta la ritrovi in Oggi.</p>`;
+  else if (greg.stato === 'errore') corpo = html`<img class="foto-risposta" src=${greg.foto} alt="la tua foto" /><p class="errore" role="alert">${greg.errore}</p>
+    <div class="azioni"><button class="primario" onClick=${() => rimanda(greg.tipo)}>Riprova</button><button class="secondario" onClick=${() => { setGreg(null); onCorreggi(null); }}>Scrivi a mano</button></div>`;
+  else if (r.tipo === 'piatto' && r.piatto) {
+    const p = r.piatto; const kcal = Math.round((p.kcal || 0) * f);
+    corpo = html`<div class="risposta-piatto"><img class="foto-risposta" src=${greg.foto} alt="la tua foto" />
+        <div><p class="desc-grande">${p.descrizione}</p><p class="kcal-grande">~ ${M.kcalTxt(kcal)} kcal</p><${Fiducia} a=${p.affidabilita} /></div></div>
+      ${p.domanda ? html`<p class="stima bassa">${p.domanda}</p>` : null}
+      <p class="piccolo">Porzione</p><${Porzioni} f=${f} setF=${setF} />
+      ${residuo != null ? html`<p class="dopo">Dopo questo restano <b>${M.kcalTxt(residuo - kcal)}</b> kcal</p>` : null}
+      ${r.nota ? html`<p class="nota-greg">💬 ${r.nota}</p>` : null}
+      <${Errore} e=${err} />
+      <div class="fondo-sheet"><button class="primario largo" disabled=${lavoro} onClick=${salvaPiatto}>${lavoro ? 'Salvo…' : 'Salva il pasto'}</button></div>
+      <div class="link-riga"><button class="link" onClick=${() => { const p2 = { descrizione: p.descrizione, kcal: kcal, proteine: tondo((p.proteine_g ?? 0) * f), carboidrati: tondo((p.carboidrati_g ?? 0) * f), grassi: tondo((p.grassi_g ?? 0) * f), fonte: 'greg_foto' }; setGreg(null); onCorreggi(p2, greg.foto); }}>✏️ Correggi</button>
+        <button class="link" onClick=${() => rimanda('scelta')}>Era una vetrina o un menu?</button></div>`;
+  } else if (r.tipo === 'scelta' && r.scelte?.length) {
+    corpo = html`<p class="piccolo">Greg consiglia${residuo != null ? html` · te ne restano <b>${M.kcalTxt(residuo)}</b>` : ''}</p>
+      <ul class="scelte">${r.scelte.map((s, i) => html`<li class=${i === 0 ? 'prima' : ''}><div class="riga"><b>${s.nome}</b><span>~ ${M.kcalTxt(s.kcal || 0)}</span></div>
+        ${s.porzione ? html`<p class="piccolo">${s.porzione}${residuo != null ? ` · ne restano ${M.kcalTxt(residuo - (s.kcal || 0))}` : ''}</p>` : null}
+        ${s.perche ? html`<p class="perche">${s.perche}</p>` : null}
+        <button class=${i === 0 ? 'primario largo' : 'secondario largo'} disabled=${lavoro} onClick=${() => prendi(s)}>Prendo questa</button></li>`)}</ul>
+      ${r.evita ? html`<p class="avviso">⚠ Meglio evitare: ${r.evita}</p>` : null}
+      ${r.nota ? html`<p class="nota-greg">💬 ${r.nota}</p>` : null}
+      <${Errore} e=${err} />
+      <div class="link-riga"><button class="link" onClick=${() => rimanda('piatto')}>Era il mio piatto?</button></div>`;
+  } else corpo = html`<img class="foto-risposta" src=${greg.foto} alt="la tua foto" /><p>Greg non riesce a leggere la foto: rifalla con più luce, più vicino.</p>
+    ${r.nota ? html`<p class="nota-greg">💬 ${r.nota}</p>` : null}`;
+  return html`<${Sheet} titolo=${greg.stato === 'attesa' ? 'Greg guarda…' : r.tipo === 'scelta' ? 'Cosa prendere' : 'Il tuo piatto'} onClose=${chiudi}>${corpo}<//>`;
+}
+
+/** Scatto → foto rimpicciolita → Greg. Il tasto non può partire due volte: una richiesta alla volta. */
+let gregInCorso = false;
+async function avviaGreg(setGreg, foto, tipo) {
+  if (gregInCorso) return; gregInCorso = true;
+  const ts = Date.now();
+  setGreg({ stato: 'attesa', foto, tipo, ts, aperto: true });
+  try { const risposta = await chiediGreg(foto, tipo); setGreg(g => g && g.ts === ts ? { ...g, stato: 'pronta', risposta } : g); }
+  catch (e) { setGreg(g => g && g.ts === ts ? { ...g, stato: 'errore', errore: 'Greg non ha risposto: ' + (e?.message || e) + '. Non hai pagato nulla se non è arrivata risposta.' } : g); }
+  finally { gregInCorso = false; }
+}
+
+function BloccoFoto({ setGreg, onVoce, onCerca, tick }) {
+  const [frequenti, setFrequenti] = useState([]);
+  useEffect(() => { getDocs(collection(db, 'preferiti')).then(s => setFrequenti(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.mini).sort((a, b) => (b.usi || 0) - (a.usi || 0)).slice(0, 6))).catch(() => {}); }, [tick]);
+  const scatto = async e => {
+    const file = e.target.files && e.target.files[0]; e.target.value = ''; if (!file) return;
+    const foto = await rimpicciolisci(file, 1024, 0.8); if (!foto) { alert('La foto non si legge.'); return; }
+    avviaGreg(setGreg, foto, '');
+  };
+  return html`<section class="card blocco-foto">
+    <label class="tasto-foto"><input type="file" accept="image/*" capture="environment" onChange=${scatto} /><span aria-hidden="true">📷</span> Fotografa</label>
+    <p class="sotto-foto">piatto, vetrina o menu · Greg ≈ 1–2 cent · <label class="link-galleria">dalla galleria<input type="file" accept="image/*" onChange=${scatto} /></label></p>
+    ${frequenti.length ? html`<p class="piccolo">I tuoi piatti · gratis</p><div class="fotine">${frequenti.map(x => html`<button onClick=${() => onVoce(x)}><img src=${miniUrl(x.mini)} alt="" /><span>${x.nome.length > 22 ? x.nome.slice(0, 21) + '…' : x.nome}</span><small>${M.kcalTxt(x.kcalPezzo ?? x.kcal100 ?? 0)}</small></button>`)}</div>` : null}
+    <button class="link" onClick=${onCerca}>🔎 Cerca o scrivi</button>
+  </section>`;
+}
+
+// Quanto ne hai mangiato: grammi (valori per 100 g), pezzi (valore per pezzo) o porzione (½ · 1 · 1½).
+function Quantita({ voce, onSalva, onAltro, onAnnulla, lavoro }) {
+  const porzione = voce.pezzo === 'porzione' && voce.kcalPezzo != null;
   const haPezzo = voce.kcalPezzo != null, haG = voce.kcal100 != null;
   const [unita, setUnita] = useState(haPezzo ? 'pezzi' : 'g');
   const [q, setQ] = useState(haPezzo ? '1' : String(voce.porzioneG || 100));
-  const [salva, setSalva] = useState(false);
-  const n = numIt(q) || 0;
-  const per = (v100, vPz) => unita === 'g' ? (v100 != null ? v100 * n / 100 : null) : (vPz != null ? vPz * n : null);
+  const n = porzione ? null : (numIt(q) || 0);
+  const [fp, setFp] = useState(1);
+  const fatt = porzione ? fp : n;
+  const per = (v100, vPz) => porzione ? (vPz != null ? vPz * fp : null) : unita === 'g' ? (v100 != null ? v100 * n / 100 : null) : (vPz != null ? vPz * n : null);
   const kcal = per(voce.kcal100, voce.kcalPezzo) || 0;
-  const aggiungi = async () => {
-    if (!n) return;
-    if (salva) await addDoc(collection(db, 'preferiti'), { nome: voce.nome, kcal100: voce.kcal100 ?? null, prot100: voce.prot100 ?? null, carbo100: voce.carbo100 ?? null, grassi100: voce.grassi100 ?? null, kcalPezzo: voce.kcalPezzo ?? null, protPezzo: voce.protPezzo ?? null, pezzo: voce.pezzo || null, porzioneG: voce.porzioneG ?? null, codice: voce.codice || null, fonte: voce.fonte || '', usi: 1, ts: Date.now() });
-    else if (voce.id) await setDoc(doc(db, 'preferiti', voce.id), { usi: (voce.usi || 0) + 1 }, { merge: true });
-    const r = x => x != null ? Math.round(x) : null;
-    onAggiungi({ descrizione: unita === 'g' ? `${voce.nome} ${String(q).replace('.', ',')} g` : `${voce.nome} ${String(q).replace('.', ',')} × ${voce.pezzo || 'pz'}`, kcal: Math.round(kcal),
-      proteine: r(per(voce.prot100, voce.protPezzo)), carboidrati: r(per(voce.carbo100, voce.carboPezzo)), grassi: r(per(voce.grassi100, voce.grassiPezzo)),
-      fonte: voce.id ? 'miei' : 'banca_dati' });
-  };
-  return html`<div class="quantita card">
-    <p><b>${voce.nome}</b><br/><small>${haG ? `${M.kcalTxt(voce.kcal100)} kcal/100 g` : ''}${haG && haPezzo ? ' · ' : ''}${haPezzo ? `${M.kcalTxt(voce.kcalPezzo)} kcal per ${voce.pezzo || 'pezzo'}` : ''}${voce.prot100 != null ? ` · proteine ${String(voce.prot100).replace('.', ',')} g/100 g` : ''}</small></p>
-    <div class="azioni"><input inputmode="decimal" value=${q} onInput=${e => setQ(e.target.value)} aria-label="Quantità" />
-      ${haG && haPezzo ? html`<button class="secondario" onClick=${() => { setUnita(unita === 'g' ? 'pezzi' : 'g'); setQ(unita === 'g' ? '1' : '100'); }}>${unita === 'g' ? 'grammi' : (voce.pezzo || 'pezzi')} ⇄</button>` : html`<span class="unita">${unita === 'g' ? 'grammi' : (voce.pezzo || 'pezzi')}</span>`}</div>
+  const voceFinale = () => ({ descrizione: porzione ? voce.nome + (fp !== 1 ? ` (porzione ${fp === 0.5 ? '½' : '1½'})` : '') : unita === 'g' ? `${voce.nome} ${String(q).replace('.', ',')} g` : `${voce.nome} ${String(q).replace('.', ',')} × ${voce.pezzo || 'pz'}`,
+    kcal: Math.round(kcal), proteine: tondo(per(voce.prot100, voce.protPezzo)), carboidrati: tondo(per(voce.carbo100, voce.carboPezzo)), grassi: tondo(per(voce.grassi100, voce.grassiPezzo)),
+    fonte: voce.id ? 'miei' : 'banca_dati', _voce: voce });
+  return html`<div class="quantita">
+    ${voce.mini ? html`<img class="foto-risposta" src=${miniUrl(voce.mini)} alt="" />` : null}
+    <p><b>${voce.nome}</b><br/><small>${haG ? `${M.kcalTxt(voce.kcal100)} kcal/100 g` : ''}${haG && haPezzo ? ' · ' : ''}${haPezzo ? `${M.kcalTxt(voce.kcalPezzo)} kcal per ${voce.pezzo || 'pezzo'}` : ''}</small></p>
+    ${porzione ? html`<${Porzioni} f=${fp} setF=${setFp} />` : html`<div class="azioni"><input inputmode="decimal" value=${q} onInput=${e => setQ(e.target.value)} aria-label="Quantità" />
+      ${haG && haPezzo ? html`<button class="secondario" onClick=${() => { setUnita(unita === 'g' ? 'pezzi' : 'g'); setQ(unita === 'g' ? '1' : '100'); }}>${unita === 'g' ? 'grammi' : (voce.pezzo || 'pezzi')} ⇄</button>` : html`<span class="unita">${unita === 'g' ? 'grammi' : (voce.pezzo || 'pezzi')}</span>`}</div>`}
     <p class="grande-medio">= ${M.kcalTxt(kcal)} kcal</p>
-    ${salvabile ? html`<label class="spunta"><input type="checkbox" checked=${salva} onChange=${e => setSalva(e.target.checked)} /> ⭐ Salva tra i miei</label>` : null}
-    <div class="azioni"><button class="primario" onClick=${aggiungi} disabled=${!n}>Aggiungi al pasto</button><button class="secondario" onClick=${onAnnulla}>Annulla</button></div>
+    <div class="fondo-sheet"><button class="primario largo" disabled=${!fatt || lavoro} onClick=${() => onSalva(voceFinale())}>${lavoro ? 'Salvo…' : 'Salva il pasto'}</button></div>
+    <div class="link-riga">${onAltro ? html`<button class="link" disabled=${!fatt} onClick=${() => onAltro(voceFinale())}>+ aggiungi altro al pasto</button>` : null}<button class="link" onClick=${onAnnulla}>Indietro</button></div>
   </div>`;
 }
 
-function IMiei({ onScegli }) {
-  const [lista, setLista] = useState(null); const [filtro, setFiltro] = useState('');
-  const carica = () => getDocs(collection(db, 'preferiti')).then(s => setLista(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.usi || 0) - (a.usi || 0) || a.nome.localeCompare(b.nome))));
-  useEffect(() => { carica(); }, []);
-  if (!lista) return html`<p class="caricamento">Carico…</p>`;
-  const f = filtro.trim().toLowerCase(); const v = f ? lista.filter(x => x.nome.toLowerCase().includes(f)) : lista;
-  const togli = async (e, x) => { e.stopPropagation(); if (confirm(`Togliere «${x.nome}» dai tuoi cibi?`)) { await deleteDoc(doc(db, 'preferiti', x.id)); carica(); } };
-  return html`${lista.length > 6 ? html`<input placeholder="Filtra i tuoi cibi" value=${filtro} onInput=${e => setFiltro(e.target.value)} aria-label="Filtra" />` : null}
-    ${v.length ? html`<ul class="voci">${v.map(x => html`<li><button onClick=${() => onScegli(x)}><span>${x.nome}</span><small>${x.kcalPezzo != null ? `${M.kcalTxt(x.kcalPezzo)} kcal/${x.pezzo || 'pz'}` : `${M.kcalTxt(x.kcal100)} kcal/100 g`}</small></button><button class="x-piccola" aria-label="Togli ${x.nome}" onClick=${e => togli(e, x)}>×</button></li>`)}</ul>`
-      : html`<p class="piccolo">Ancora nessuno. Si riempie da solo: quando cerchi un prodotto o scrivi un pasto a mano, spunta «⭐ Salva tra i miei».</p>`}`;
-}
-
-function Cerca({ onScegli }) {
-  const [q, setQ] = useState(''); const [ris, setRis] = useState(null); const [att, setAtt] = useState(false); const [err, setErr] = useState('');
-  const vai = async e => { e?.preventDefault(); if (q.trim().length < 2) return; setAtt(true); setErr('');
-    try { setRis(await offCerca(q)); } catch (x) { setErr('Ricerca non riuscita: controlla la connessione.'); } setAtt(false); };
-  return html`<form class="azioni" onSubmit=${vai}><input type="search" inputmode="search" placeholder="Nome o codice a barre" value=${q} onInput=${e => setQ(e.target.value)} aria-label="Cerca un prodotto" /><button class="primario" disabled=${att}>${att ? '…' : 'Cerca'}</button></form>
-    <p class="piccolo">Banca dati Open Food Facts: valori dell'etichetta. Il codice a barre è il numero sotto le barre.</p>
-    <${Errore} e=${err} />
-    ${ris ? (ris.length ? html`<ul class="voci">${ris.map(x => html`<li><button onClick=${() => onScegli(x)}><span>${x.nome}</span><small>${M.kcalTxt(x.kcal100)} kcal/100 g</small></button></li>`)}</ul>`
-      : html`<p class="piccolo">Niente trovato. Prova con meno parole o con la marca, oppure scrivilo a mano.</p>`) : null}`;
-}
-
-function DaGemini({ onAggiungi }) {
-  const [t, setT] = useState(''); const [err, setErr] = useState(''); const [copiato, setCopiato] = useState(false);
-  const apri = () => { try { navigator.clipboard.writeText(DOMANDA_GEMINI).then(() => setCopiato(true), () => setCopiato(false)); } catch {} window.open('https://gemini.google.com/app', '_blank'); };
-  const incolla = async () => { try { setT(await navigator.clipboard.readText()); } catch { setErr('Tieni premuto nel riquadro e scegli «Incolla».'); } };
-  const leggi = () => { const r = leggiGemini(t); if (!r) { setErr('Non trovo le kcal nella risposta: controlla di aver incollato la riga che inizia con FASTTRACK.'); return; } setErr(''); setT(''); onAggiungi(r); };
-  return html`<ol class="passi">
-      <li>Per i piatti difficili (ristorante, piatto misto, porzione incerta).</li>
-      <li><button class="primario" onClick=${apri}>📋 Copia la domanda e apri Gemini</button>${copiato ? html` <small>copiata ✓</small>` : null}</li>
-      <li>In Gemini allega la foto, incolla la domanda e invia.</li>
-      <li>Copia la riga della risposta e incollala qui:</li></ol>
-    <textarea rows="3" value=${t} onInput=${e => setT(e.target.value)} placeholder="FASTTRACK | descrizione: … | kcal: …" aria-label="Risposta di Gemini"></textarea>
-    <div class="azioni"><button class="secondario" onClick=${incolla}>Incolla</button><button class="primario" onClick=${leggi} disabled=${!t.trim()}>Leggi la risposta</button></div>
-    <${Errore} e=${err} />`;
-}
-
-function PastoSheet({ pasto, data, onClose, aggiorna }) {
+/** Cerca o scrivi: un solo campo. Prima i tuoi cibi (subito, mentre scrivi), poi le etichette (Open Food Facts). */
+function PastoSheet({ pasto, data, onClose, aggiorna, iniziale, fotoIniziale }) {
   const nuovo = !pasto;
-  const [modo, setModo] = useState('miei');
-  const [scelta, setScelta] = useState(null);
-  const [foto, setFoto] = useState([]);
-  const [f, setF] = useState(() => pasto ? { descrizione: pasto.descrizione || '', kcal: String(pasto.kcal ?? ''), proteine: String(pasto.proteine ?? ''), carboidrati: String(pasto.carboidrati ?? ''), grassi: String(pasto.grassi ?? ''), ora: pasto.ora || M.oraRoma(), fonte: pasto.fonte || 'a_mano', sgarro: pasto.aderenza === 'sgarro' }
-    : { descrizione: '', kcal: '', proteine: '', carboidrati: '', grassi: '', ora: M.oraRoma(), fonte: '', sgarro: false });
-  const [voci, setVoci] = useState(0);
+  const [modo, setModo] = useState(iniziale ? 'mano' : nuovo ? 'cerca' : 'modifica'); // cerca · mano · gemini · modifica
+  const [q, setQ] = useState(''); const [miei, setMiei] = useState([]); const [off, setOff] = useState(null); const [cercando, setCercando] = useState(false);
+  const [scelta, setScelta] = useState(null); const [voci, setVoci] = useState([]);
+  const [f, setF] = useState(() => { const b = pasto || iniziale; return b ? { descrizione: b.descrizione || '', kcal: String(b.kcal ?? ''), proteine: String(b.proteine ?? ''), carboidrati: String(b.carboidrati ?? ''), grassi: String(b.grassi ?? ''), ora: pasto?.ora || M.oraRoma(), fonte: b.fonte || 'a_mano', sgarro: pasto?.aderenza === 'sgarro' }
+    : { descrizione: '', kcal: '', proteine: '', carboidrati: '', grassi: '', ora: M.oraRoma(), fonte: 'a_mano', sgarro: false }; });
   const [salvaMiei, setSalvaMiei] = useState(false);
-  const [lavoro, setLavoro] = useState(''); const [err, setErr] = useState('');
-  const [archivio, setArchivio] = useState([]);
-  const inFile = useRef();
+  const [lavoro, setLavoro] = useState(false); const [err, setErr] = useState('');
+  const [archivio, setArchivio] = useState([]); const [gT, setGT] = useState('');
   useEffect(() => { if (pasto?.foto?.length) Promise.all(pasto.foto.map(fotoUrl)).then(v => setArchivio(v.filter(Boolean))); }, []);
+  useEffect(() => { if (nuovo) getDocs(collection(db, 'preferiti')).then(s => setMiei(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.usi || 0) - (a.usi || 0) || a.nome.localeCompare(b.nome)))); }, []);
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
-  const somma = (a, b) => b == null ? a : String(Math.round((numIt(a) || 0) + b));
-  const aggiungiVoce = v => {
-    setF(x => ({ ...x, descrizione: x.descrizione ? `${x.descrizione} + ${v.descrizione}` : v.descrizione, kcal: somma(x.kcal, v.kcal), proteine: somma(x.proteine, v.proteine), carboidrati: somma(x.carboidrati, v.carboidrati), grassi: somma(x.grassi, v.grassi),
-      fonte: x.fonte && x.fonte !== v.fonte ? 'misto' : v.fonte }));
-    setVoci(n => n + 1); setScelta(null);
+  const filtro = q.trim().toLowerCase(); const mieiVisti = filtro ? miei.filter(x => x.nome.toLowerCase().includes(filtro)) : miei.slice(0, 8);
+  const cercaEtichette = async e => { e?.preventDefault(); if (q.trim().length < 2) return; setCercando(true); setErr('');
+    try { setOff(await offCerca(q)); } catch { setErr('Ricerca non riuscita: controlla la connessione.'); } setCercando(false); };
+  const ricorda = async v => { const x = v._voce; if (!x) return; if (x.id) await setDoc(doc(db, 'preferiti', x.id), { usi: (x.usi || 0) + 1 }, { merge: true }); else await ricordaCibo({ nome: x.nome, kcal100: x.kcal100, prot100: x.prot100, carbo100: x.carbo100, grassi100: x.grassi100, porzioneG: x.porzioneG, codice: x.codice, fonte: x.fonte }); };
+  const salvaVoci = async tutte => {
+    setLavoro(true); setErr('');
+    try { for (const v of tutte) await ricorda(v); await salvaPasto(data, tutte.map(({ _voce, ...r }) => r)); aggiorna(); onClose(); }
+    catch (x) { setErr('Non salvato: ' + (x?.message || x)); setLavoro(false); }
   };
-  const aggiungiFoto = async e => {
-    const files = [...(e.target.files || [])].slice(0, 3 - foto.length); e.target.value = '';
-    for (const x of files) { const a = await rimpicciolisci(x, 800, 0.7); if (a) setFoto(v => [...v, a]); else setErr('Una foto non si legge.'); }
-  };
-  const salva = async () => {
-    const kcal = numIt(f.kcal); if (kcal == null || kcal < 0 || kcal > 6000) { setErr('Mancano le kcal: scegli un cibo, cercalo o scrivile a mano.'); return; }
+  const salvaModulo = async () => {
+    const kcal = numIt(f.kcal); if (kcal == null || kcal < 0 || kcal > 6000) { setErr('Scrivi le kcal (un numero).'); return; }
     if (!f.descrizione.trim()) { setErr('Scrivi cosa hai mangiato.'); return; }
-    setLavoro('Salvo…'); setErr('');
+    setLavoro(true); setErr('');
     try {
       const n = k => numIt(f[k]) != null ? Math.round(numIt(f[k])) : null;
-      const campi = { descrizione: f.descrizione.trim().slice(0, 300), kcal: Math.round(kcal), proteine: n('proteine'), carboidrati: n('carboidrati'), grassi: n('grassi'),
-        ora: f.ora || M.oraRoma(), fonte: f.fonte || 'a_mano', aderenza: f.sgarro ? 'sgarro' : 'piano' };
-      if (nuovo) {
-        const ids = []; for (const a of foto) ids.push(await salvaFoto(a));
-        await addDoc(collection(db, 'pasti'), { data, ...campi, foto: ids, ts: Date.now(), origine: 'fasttrack' });
-        if (salvaMiei) await addDoc(collection(db, 'preferiti'), { nome: campi.descrizione, kcalPezzo: campi.kcal, protPezzo: campi.proteine, carboPezzo: campi.carboidrati, grassiPezzo: campi.grassi, kcal100: null, pezzo: 'porzione', fonte: 'a mano', usi: 1, ts: Date.now() });
-      } else await updateDoc(doc(db, 'pasti', pasto.id), campi);
+      const campi = { descrizione: f.descrizione.trim().slice(0, 300), kcal: Math.round(kcal), proteine: n('proteine'), carboidrati: n('carboidrati'), grassi: n('grassi'), ora: f.ora || M.oraRoma(), fonte: f.fonte || 'a_mano', aderenza: f.sgarro ? 'sgarro' : 'piano' };
+      if (modo === 'modifica') await updateDoc(doc(db, 'pasti', pasto.id), campi);
+      else {
+        const foto = fotoIniziale ? [await salvaFoto(await ridimensiona(fotoIniziale, 800, 0.72))] : [];
+        await addDoc(collection(db, 'pasti'), { data, ...campi, foto, ts: Date.now(), origine: 'fasttrack' });
+        if (salvaMiei) await ricordaCibo({ nome: campi.descrizione, kcalPezzo: campi.kcal, protPezzo: campi.proteine, carboPezzo: campi.carboidrati, grassiPezzo: campi.grassi, pezzo: 'porzione', fonte: 'a mano' });
+      }
       aggiorna(); onClose();
-    } catch (x) { setErr('Non salvato: ' + (x?.message || x)); setLavoro(''); }
+    } catch (x) { setErr('Non salvato: ' + (x?.message || x)); setLavoro(false); }
   };
   const elimina = async () => { if (!confirm('Eliminare questo pasto?')) return; await deleteDoc(doc(db, 'pasti', pasto.id)); for (const id of pasto.foto || []) await deleteDoc(doc(db, 'foto', id)).catch(() => {}); aggiorna(); onClose(); };
-  const MODI = [['miei', '⭐ I miei'], ['cerca', '🔎 Cerca'], ['mano', '✍️ A mano'], ['gemini', '🤖 Gemini']];
+  const apriGemini = () => { try { navigator.clipboard.writeText(DOMANDA_GEMINI); } catch {} window.open('https://gemini.google.com/app', '_blank'); };
+  const leggiG = () => { const r = leggiGemini(gT); if (!r) { setErr('Non trovo le kcal: incolla la riga che inizia con FASTTRACK.'); return; } setErr(''); setF(x => ({ ...x, descrizione: r.descrizione, kcal: String(r.kcal), proteine: r.proteine != null ? String(r.proteine) : '', carboidrati: r.carboidrati != null ? String(r.carboidrati) : '', grassi: r.grassi != null ? String(r.grassi) : '', fonte: 'gemini_app' })); setModo('mano'); };
+  const voceRiga = (x, extra) => html`<li><button onClick=${() => setScelta(x)}>${x.mini ? html`<img class="mini-riga" src=${miniUrl(x.mini)} alt="" />` : null}<span>${x.nome}</span><small>${x.kcalPezzo != null ? `${M.kcalTxt(x.kcalPezzo)} kcal/${x.pezzo || 'pz'}` : `${M.kcalTxt(x.kcal100)} kcal/100 g`}</small></button>${extra || null}</li>`;
+  const togli = async (e, x) => { e.stopPropagation(); if (confirm(`Togliere «${x.nome}» dai tuoi cibi?`)) { await deleteDoc(doc(db, 'preferiti', x.id)); setMiei(m => m.filter(y => y.id !== x.id)); } };
 
-  return html`<${Sheet} titolo=${nuovo ? 'Nuovo pasto' : 'Modifica pasto'} onClose=${onClose}>
-    ${nuovo ? html`<div class="segmenti" role="tablist">${MODI.map(([k, t]) => html`<button role="tab" aria-selected=${modo === k} class=${modo === k ? 'attivo' : ''} onClick=${() => { setModo(k); setScelta(null); }}>${t}</button>`)}</div>
-      ${scelta ? html`<${Quantita} voce=${scelta} salvabile=${!scelta.id} onAggiungi=${aggiungiVoce} onAnnulla=${() => setScelta(null)} />`
-        : modo === 'miei' ? html`<${IMiei} onScegli=${setScelta} />`
-        : modo === 'cerca' ? html`<${Cerca} onScegli=${setScelta} />`
-        : modo === 'gemini' ? html`<${DaGemini} onAggiungi=${aggiungiVoce} />`
-        : html`<p class="piccolo">Scrivi cosa e le kcal qui sotto (es. dall'etichetta o dal menu).</p>`}
-      ${voci ? html`<p class="stima">Nel pasto: ${voci} ${voci === 1 ? 'voce' : 'voci'}. Puoi aggiungerne altre dalle schede qui sopra.</p>` : null}`
-    : archivio.length ? html`<div class="foto-riga">${archivio.map(u => html`<div class="mini"><img src=${u} alt="foto del pasto" /></div>`)}</div>` : null}
+  const modulo = html`
     <${Campo} etichetta="Cosa"><textarea rows="3" value=${f.descrizione} onInput=${e => set('descrizione', e.target.value)}></textarea><//>
     <div class="griglia">
       <${Campo} etichetta="kcal"><input inputmode="numeric" value=${f.kcal} onInput=${e => set('kcal', e.target.value)} /><//>
@@ -281,17 +371,29 @@ function PastoSheet({ pasto, data, onClose, aggiorna }) {
       <${Campo} etichetta="Proteine g"><input inputmode="decimal" value=${f.proteine} onInput=${e => set('proteine', e.target.value)} /><//>
       <${Campo} etichetta="Carboidrati g"><input inputmode="decimal" value=${f.carboidrati} onInput=${e => set('carboidrati', e.target.value)} /><//>
     </div>
-    ${nuovo ? html`<div class="foto-riga">
-        ${foto.map((u, i) => html`<div class="mini"><img src=${u} alt="foto ${i + 1}" /><button aria-label="Togli la foto" onClick=${() => setFoto(v => v.filter((_, j) => j !== i))}>×</button></div>`)}
-        ${foto.length < 3 ? html`<button class="foto-add" onClick=${() => inFile.current.click()}>📷<span>Foto</span></button>` : null}
-        <input ref=${inFile} type="file" accept="image/*" multiple hidden onChange=${aggiungiFoto} /></div>
-      <p class="piccolo">La foto resta nel diario, così Greg la vede nelle verifiche.</p>` : null}
     <label class="spunta"><input type="checkbox" checked=${f.sgarro} onChange=${e => set('sgarro', e.target.checked)} /> È uno sgarro</label>
-    ${nuovo && modo === 'mano' ? html`<label class="spunta"><input type="checkbox" checked=${salvaMiei} onChange=${e => setSalvaMiei(e.target.checked)} /> ⭐ Salva tra i miei (come porzione)</label>` : null}
+    ${modo === 'mano' ? html`<label class="spunta"><input type="checkbox" checked=${salvaMiei} onChange=${e => setSalvaMiei(e.target.checked)} /> ⭐ Ricordalo tra i miei piatti</label>` : null}
     <${Errore} e=${err} />
-    <div class="azioni"><button class="primario largo" disabled=${!!lavoro} onClick=${salva}>${lavoro || 'Salva il pasto'}</button></div>
-    ${!nuovo ? html`<button class="link rosso" onClick=${elimina}>Elimina il pasto</button>` : null}
-  <//>`;
+    <div class="fondo-sheet"><button class="primario largo" disabled=${lavoro} onClick=${salvaModulo}>${lavoro ? 'Salvo…' : 'Salva il pasto'}</button></div>`;
+
+  let corpo;
+  if (modo === 'modifica') corpo = html`${archivio.length ? html`<div class="foto-riga">${archivio.map(u => html`<div class="mini"><img src=${u} alt="foto del pasto" /></div>`)}</div>` : null}${modulo}<button class="link rosso" onClick=${elimina}>Elimina il pasto</button>`;
+  else if (modo === 'mano') corpo = html`${fotoIniziale ? html`<img class="foto-risposta" src=${fotoIniziale} alt="" />` : null}${modulo}${!iniziale ? html`<button class="link" onClick=${() => setModo('cerca')}>‹ Torna a cerca</button>` : null}`;
+  else if (modo === 'gemini') corpo = html`<ol class="passi"><li><button class="primario" onClick=${apriGemini}>📋 Copia la domanda e apri Gemini</button></li><li>In Gemini allega la foto, incolla e invia.</li><li>Copia la riga di risposta e incollala qui:</li></ol>
+    <textarea rows="3" value=${gT} onInput=${e => setGT(e.target.value)} placeholder="FASTTRACK | descrizione: … | kcal: …" aria-label="Risposta di Gemini"></textarea>
+    <div class="azioni"><button class="secondario" onClick=${async () => { try { setGT(await navigator.clipboard.readText()); } catch { setErr('Tieni premuto nel riquadro e scegli «Incolla».'); } }}>Incolla</button><button class="primario" disabled=${!gT.trim()} onClick=${leggiG}>Leggi la risposta</button></div>
+    <${Errore} e=${err} /><button class="link" onClick=${() => setModo('cerca')}>‹ Torna a cerca</button>`;
+  else if (scelta) corpo = html`<${Quantita} voce=${scelta} lavoro=${lavoro} onSalva=${v => salvaVoci([...voci, v])} onAltro=${v => { setVoci(x => [...x, v]); setScelta(null); setQ(''); setOff(null); }} onAnnulla=${() => setScelta(null)} /><${Errore} e=${err} />`;
+  else corpo = html`
+    ${voci.length ? html`<div class="nel-pasto"><p><b>Nel pasto:</b> ${voci.map(v => v.descrizione).join(' + ')} · <b>${M.kcalTxt(voci.reduce((s, v) => s + v.kcal, 0))} kcal</b></p>
+      <button class="primario largo" disabled=${lavoro} onClick=${() => salvaVoci(voci)}>${lavoro ? 'Salvo…' : 'Salva il pasto'}</button></div>` : null}
+    <form class="azioni" onSubmit=${cercaEtichette}><input type="search" inputmode="search" placeholder="Cosa hai mangiato? (o codice a barre)" value=${q} onInput=${e => { setQ(e.target.value); setOff(null); }} aria-label="Cerca un cibo" /></form>
+    ${mieiVisti.length ? html`<p class="piccolo">${filtro ? 'Tra i tuoi' : 'I tuoi più usati'}</p><ul class="voci">${mieiVisti.map(x => voceRiga(x, html`<button class="x-piccola" aria-label="Togli ${x.nome}" onClick=${e => togli(e, x)}>×</button>`))}</ul>` : null}
+    ${filtro.length >= 2 ? (off ? (off.length ? html`<p class="piccolo">Dalle etichette (Open Food Facts)</p><ul class="voci">${off.map(x => voceRiga(x))}</ul>` : html`<p class="piccolo">Nelle etichette non c'è.</p>`)
+      : html`<button class="secondario largo" disabled=${cercando} onClick=${cercaEtichette}>${cercando ? 'Cerco…' : `🔎 Cerca «${q.trim()}» nelle etichette`}</button>`) : null}
+    <${Errore} e=${err} />
+    <div class="link-riga"><button class="link" onClick=${() => { setF(x => ({ ...x, descrizione: x.descrizione || q })); setModo('mano'); }}>✍️ Scrivi tu le kcal</button><button class="link" onClick=${() => setModo('gemini')}>Gratis, via Gemini</button></div>`;
+  return html`<${Sheet} titolo=${modo === 'modifica' ? 'Modifica pasto' : 'Cosa hai mangiato?'} onClose=${onClose}>${corpo}<//>`;
 }
 
 function AttivitaSheet({ data, g, onClose, aggiorna }) {
@@ -322,7 +424,7 @@ function ChiudiSheet({ data, n, onClose, aggiorna }) {
   <//>`;
 }
 
-function Oggi({ tick, aggiorna }) {
+function Oggi({ tick, aggiorna, greg, setGreg }) {
   const data = M.oggiRoma();
   const [n, setN] = useState(null); const [dig, setDig] = useState(null); const [err, setErr] = useState('');
   const [sheet, setSheet] = useState(null);
@@ -331,23 +433,27 @@ function Oggi({ tick, aggiorna }) {
   if (!n) return html`<p class="caricamento">Carico…</p>`;
   const g = n.giorno || {};
   const acqua = async () => { await aggiornaGiorno(data, { acquaL: M.r1((g.acquaL || 0) + 0.25) }); aggiorna(); };
+  const salvaVoceRapida = async v => { setSheet({ tipo: 'salvo' }); await setDoc(doc(db, 'preferiti', v._voce.id), { usi: (v._voce.usi || 0) + 1 }, { merge: true }); const { _voce, ...r } = v; await salvaPasto(data, [r]); setSheet(null); aggiorna(); };
   return html`
     <${Budget} n=${n} />
-    <${Digiuno} stato=${dig} n=${n} aggiorna=${aggiorna} />
-    <${Consigli} lista=${M.consigli(n, dig)} />
-    <section class="card"><div class="riga"><h3>Pasti di oggi</h3><span class="pill">${n.pasti.length}</span></div>
+    ${greg && !greg.aperto ? html`<button class="banner-greg" onClick=${() => setGreg(x => ({ ...x, aperto: true }))}>${greg.stato === 'attesa' ? '📷 Greg sta guardando la foto…' : '📷 Greg ha risposto · apri'}</button>` : null}
+    <${BloccoFoto} setGreg=${setGreg} tick=${tick} onVoce=${x => setSheet({ tipo: 'voce', voce: x })} onCerca=${() => setSheet({ tipo: 'pasto' })} />
+    <${Consiglio} lista=${M.consigli(n, dig)} />
+    <section class="card"><h3>Pasti di oggi</h3>
       ${n.pasti.length ? html`<ul class="pasti">${n.pasti.map(p => html`<li><button onClick=${() => setSheet({ tipo: 'pasto', pasto: p })}>
           <span class="ora">${p.ora || ''}</span><span class="desc">${p.descrizione}${p.foto?.length ? ' 📷' : ''}${p.aderenza === 'sgarro' ? html` <em class="sgarro">sgarro</em>` : ''}</span><b>${M.kcalTxt(p.kcal)}</b></button></li>`)}</ul>`
-        : html`<p class="piccolo">Ancora nessun pasto registrato.</p>`}
-      <div class="azioni"><button class="primario largo" onClick=${() => setSheet({ tipo: 'pasto' })}>📷 Aggiungi un pasto</button></div>
+        : html`<p class="piccolo">Ancora nessun pasto: fotografa o tocca un tuo piatto qui sopra.</p>`}
     </section>
+    <${Digiuno} stato=${dig} aggiorna=${aggiorna} />
     <section class="card"><div class="riga"><h3>Attività</h3><button class="link" onClick=${() => setSheet({ tipo: 'attivita' })}>Modifica</button></div>
       <div class="tre"><div><b>${g.passi != null ? M.kcalTxt(g.passi) : '—'}</b><span>passi</span></div><div><b>${g.kcalAttive != null ? M.kcalTxt(g.kcalAttive) : '—'}</b><span>kcal attive</span></div><div><b>${g.acquaL != null ? String(g.acquaL).replace('.', ',') : '0'} L</b><span>acqua</span></div></div>
       <div class="azioni"><button class="secondario" onClick=${acqua}>💧 + 0,25 L</button></div>
-      ${g.attivitaFonte ? html`<p class="piccolo">Fonte: ${g.attivitaFonte}</p>` : null}
     </section>
     <button class="${g.chiusa ? 'secondario' : 'primario'} largo" onClick=${() => setSheet({ tipo: 'chiudi' })}>${g.chiusa ? `✓ Giornata chiusa (${g.esito || ''})` : 'Chiudi la giornata'}</button>
-    ${sheet?.tipo === 'pasto' ? html`<${PastoSheet} pasto=${sheet.pasto} data=${data} onClose=${() => setSheet(null)} aggiorna=${aggiorna} />` : null}
+    ${greg && greg.aperto ? html`<${GregSheet} greg=${greg} setGreg=${setGreg} n=${n} aggiorna=${aggiorna} onCorreggi=${(v, foto) => setSheet({ tipo: 'pasto', iniziale: v || { descrizione: '', kcal: '', fonte: 'a_mano' }, foto })} />` : null}
+    ${sheet?.tipo === 'voce' ? html`<${Sheet} titolo="Il tuo piatto" onClose=${() => setSheet(null)}><${Quantita} voce=${sheet.voce} onSalva=${salvaVoceRapida} onAnnulla=${() => setSheet(null)} /><//>` : null}
+    ${sheet?.tipo === 'salvo' ? html`<p class="caricamento">Salvo…</p>` : null}
+    ${sheet?.tipo === 'pasto' ? html`<${PastoSheet} pasto=${sheet.pasto} iniziale=${sheet.iniziale} fotoIniziale=${sheet.foto} data=${data} onClose=${() => setSheet(null)} aggiorna=${aggiorna} />` : null}
     ${sheet?.tipo === 'attivita' ? html`<${AttivitaSheet} data=${data} g=${n.giorno} onClose=${() => setSheet(null)} aggiorna=${aggiorna} />` : null}
     ${sheet?.tipo === 'chiudi' ? html`<${ChiudiSheet} data=${data} n=${n} onClose=${() => setSheet(null)} aggiorna=${aggiorna} />` : null}`;
 }
@@ -486,7 +592,8 @@ function Altro({ tick, aggiorna }) {
       <p class="piccolo">Su questo telefono ci sono ${(vecchi.weightHistory || []).length} pesate e ${(vecchi.fastingHistory || []).length} digiuni completati della versione precedente.</p>
       <button class="secondario largo" onClick=${importa}>Importali nel database</button></section>` : null}
     <section class="card"><h3>Come funziona</h3><ul class="conti">
-      <li>Le calorie vengono dalle <b>etichette</b> (banca dati Open Food Facts, per nome o codice a barre) e dai <b>tuoi cibi</b> salvati. Nei casi limite l'app ti prepara la domanda per <b>Gemini</b>: incolli la risposta e la legge lei.</li>
+      <li><b>📷 Fotografa</b>: piatto, vetrina o menu vanno a <b>Greg</b> (circa 1–2 centesimi a foto). Il piatto stimato resta tra i tuoi con la fotina: la volta dopo lo tocchi e non paghi.</li>
+      <li><b>🔎 Cerca o scrivi</b> è gratis: prima i tuoi cibi, poi le <b>etichette</b> (Open Food Facts, per nome o codice a barre). C'è anche Gemini incollato, gratuito.</li>
       <li>Tutti i conti li fa il codice: obiettivo mai sotto il basale, l'attività non si somma al budget, ritaratura il sabato sul calo reale.</li>
       <li>Passi e calorie attive arrivano la sera col Comando rapido dell'iPhone.</li>
       <li>Per una verifica completa chiedi a <b>Greg</b> in AZienda: legge questo stesso diario.</li></ul></section>
@@ -500,6 +607,7 @@ function App() {
   const [utente, setUtente] = useState(undefined);
   const [scheda, setScheda] = useState(() => { try { return localStorage.getItem('ft2_scheda') || 'oggi'; } catch { return 'oggi'; } });
   const [tick, setTick] = useState(0);
+  const [greg, setGreg] = useState(null);
   const aggiorna = () => setTick(t => t + 1);
   useEffect(() => onAuthStateChanged(auth, u => setUtente(u || null)), []);
   useEffect(() => { try { localStorage.setItem('ft2_scheda', scheda); } catch {} }, [scheda]);
@@ -509,7 +617,7 @@ function App() {
   const Vista = { oggi: Oggi, diario: Diario, peso: Peso, altro: Altro }[scheda];
   const titolo = { oggi: new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Rome' }), diario: 'Diario', peso: 'Peso', altro: 'Altro' }[scheda];
   return html`<header class="testa"><h1>${titolo}</h1></header>
-    <main class="contenuto"><${Vista} tick=${tick} aggiorna=${aggiorna} /></main>
+    <main class="contenuto"><${Vista} tick=${tick} aggiorna=${aggiorna} greg=${greg} setGreg=${setGreg} /></main>
     <nav class="schede" aria-label="Sezioni">${SCHEDE.map(([k, t, i]) => html`<button class=${scheda === k ? 'attiva' : ''} aria-current=${scheda === k ? 'page' : null} onClick=${() => setScheda(k)}><span aria-hidden="true">${i}</span>${t}</button>`)}</nav>`;
 }
 
