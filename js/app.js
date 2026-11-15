@@ -7,7 +7,7 @@ import { html, render, useState, useEffect, useRef } from 'https://cdn.jsdelivr.
 import { auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, Bytes } from './firebase.js';
 import * as M from './motore.js';
 
-const VERSIONE = '2.4 · 15/11/2026';
+const VERSIONE = '2.5 · 15/11/2026';
 const numIt = v => { const n = Number(String(v ?? '').trim().replace(/\s/g, '').replace(',', '.')); return isFinite(n) && String(v ?? '').trim() !== '' ? n : null; };
 
 // ---------- foto del pasto: rimpicciolite sul telefono (800 px) e tenute nel diario ----------
@@ -295,6 +295,30 @@ function GregSheet({ greg, setGreg, n, aggiorna, onCorreggi }) {
     } catch (e) { setErr('Non salvato: ' + (e?.message || e)); setLavoro(false); }
   };
   const rimanda = tipo => avviaGreg(setGreg, greg.foto, tipo);
+  const dataDa = g => { const o = M.oggiRoma(); if (!g || g === 'oggi') return o; if (g === 'ieri') return M.addGiorni(o, -1); return /^\d{4}-\d{2}-\d{2}$/.test(g) && g <= o ? g : o; };
+  const salvaAttivita = async () => {
+    setLavoro(true); setErr('');
+    try {
+      const a = r.attivita || {}; const c = {};
+      if (a.passi) c.passi = Math.round(a.passi);
+      if (a.kcal_attive) c.kcalAttive = Math.round(a.kcal_attive);
+      if (a.km) c.km = M.r1(a.km);
+      if (a.minuti) c.minuti = Math.round(a.minuti);
+      if (!Object.keys(c).length) { setErr('Nella foto non vedo numeri da salvare.'); setLavoro(false); return; }
+      await aggiornaGiorno(dataDa(a.giorno), { ...c, attivitaFonte: 'foto (' + (a.fonte || 'Greg') + ')' });
+      setGreg(null); aggiorna();
+    } catch (e) { setErr('Non salvato: ' + (e?.message || e)); setLavoro(false); }
+  };
+  const salvaPeso = async () => {
+    setLavoro(true); setErr('');
+    try {
+      const kg = Number(r.peso?.kg); if (!(kg > 40 && kg < 200)) { setErr('Non leggo il peso: scrivilo nella scheda Peso.'); setLavoro(false); return; }
+      const d = M.oggiRoma();
+      await setDoc(doc(db, 'pesate', d), { data: d, kg: M.r1(kg), fonte: 'foto della bilancia', ts: Date.now() });
+      await M.bilancioSeTocca(d).catch(() => null);
+      setGreg(null); aggiorna();
+    } catch (e) { setErr('Non salvato: ' + (e?.message || e)); setLavoro(false); }
+  };
   let corpo;
   if (greg.stato === 'attesa') corpo = html`<div class="attesa"><img src=${greg.foto} alt="la tua foto" /><div class="velo-attesa"><p role="status">${FRASI_ATTESA[frase]}</p><div class="barra-attesa"><div></div></div>
       ${Date.now() - greg.ts > 20000 ? html`<p class="piccolo-bianco">Ci mette più del solito…</p>` : null}</div></div>
@@ -323,9 +347,23 @@ function GregSheet({ greg, setGreg, n, aggiorna, onCorreggi }) {
       ${r.nota ? html`<p class="nota-greg">💬 ${r.nota}</p>` : null}
       <${Errore} e=${err} />
       <div class="link-riga"><button class="link" onClick=${() => rimanda('piatto')}>Era il mio piatto?</button></div>`;
+  } else if (r.tipo === 'attivita' && r.attivita) {
+    const a = r.attivita; const g = dataDa(a.giorno);
+    corpo = html`<div class="risposta-piatto"><img class="foto-risposta" src=${greg.foto} alt="la tua foto" />
+        <div><p class="desc-grande">Attività ${g === M.oggiRoma() ? 'di oggi' : 'del ' + M.dataBreve(g)}</p><p class="piccolo">${a.fonte || ''}</p></div></div>
+      <div class="tre">${a.passi ? html`<div><b>${M.kcalTxt(a.passi)}</b><span>passi</span></div>` : null}${a.kcal_attive ? html`<div><b>${M.kcalTxt(a.kcal_attive)}</b><span>kcal attive</span></div>` : null}${a.km ? html`<div><b>${String(M.r1(a.km)).replace('.', ',')}</b><span>km</span></div>` : null}${a.minuti ? html`<div><b>${a.minuti}</b><span>minuti</span></div>` : null}</div>
+      ${a.kcal_macchina ? html`<p class="piccolo">Il tapis roulant segna ${M.kcalTxt(a.kcal_macchina)} kcal: non le conto, di solito sono sovrastimate e l'attività non si aggiunge al budget.</p>` : null}
+      ${r.nota ? html`<p class="nota-greg">💬 ${r.nota}</p>` : null}
+      <${Errore} e=${err} />
+      <div class="fondo-sheet"><button class="primario largo" disabled=${lavoro} onClick=${salvaAttivita}>${lavoro ? 'Salvo…' : "Salva nell'attività"}</button></div>`;
+  } else if (r.tipo === 'peso' && r.peso) {
+    corpo = html`<div class="risposta-piatto"><img class="foto-risposta" src=${greg.foto} alt="la tua foto" /><div><p class="desc-grande">Pesata di oggi</p><p class="kcal-grande">${M.kgTxt(Number(r.peso.kg) || 0)} kg</p></div></div>
+      <p class="piccolo">${M.giornoSettimana(M.oggiRoma()) === 'sab' ? 'È sabato: salvandola parte il bilancio della settimana.' : 'La singola pesata oscilla: conta la tendenza.'}</p>
+      <${Errore} e=${err} />
+      <div class="fondo-sheet"><button class="primario largo" disabled=${lavoro} onClick=${salvaPeso}>${lavoro ? 'Salvo…' : 'Salva la pesata'}</button></div>`;
   } else corpo = html`<img class="foto-risposta" src=${greg.foto} alt="la tua foto" /><p>Greg non riesce a leggere la foto: rifalla con più luce, più vicino.</p>
     ${r.nota ? html`<p class="nota-greg">💬 ${r.nota}</p>` : null}`;
-  return html`<${Sheet} titolo=${greg.stato === 'attesa' ? 'Greg guarda…' : r.tipo === 'scelta' ? 'Cosa prendere' : 'Il tuo piatto'} onClose=${chiudi}>${corpo}<//>`;
+  return html`<${Sheet} titolo=${greg.stato === 'attesa' ? 'Greg guarda…' : r.tipo === 'scelta' ? 'Cosa prendere' : r.tipo === 'attivita' ? 'Attività' : r.tipo === 'peso' ? 'Bilancia' : 'Il tuo piatto'} onClose=${chiudi}>${corpo}<//>`;
 }
 
 /** Scatto → foto rimpicciolita → Greg. Il tasto non può partire due volte: una richiesta alla volta. */
@@ -349,7 +387,7 @@ function BloccoFoto({ setGreg, onVoce, onCerca, tick }) {
   };
   return html`<section class="card blocco-foto">
     <label class="tasto-foto"><input type="file" accept="image/*" capture="environment" onChange=${scatto} /><span aria-hidden="true">📷</span> Fotografa</label>
-    <p class="sotto-foto">piatto, vetrina o menu · Greg ≈ 1–2 cent · <label class="link-galleria">dalla galleria<input type="file" accept="image/*" onChange=${scatto} /></label></p>
+    <p class="sotto-foto">piatto, vetrina, menu, passi o bilancia · Greg ≈ 1–2 cent · <label class="link-galleria">dalla galleria<input type="file" accept="image/*" onChange=${scatto} /></label></p>
     ${frequenti.length ? html`<p class="piccolo">I tuoi piatti · gratis</p><div class="fotine">${frequenti.map(x => html`<button onClick=${() => onVoce(x)}><img src=${miniUrl(x.mini)} alt="" /><span>${x.nome.length > 22 ? x.nome.slice(0, 21) + '…' : x.nome}</span><small>${M.kcalTxt(x.kcalPezzo ?? x.kcal100 ?? 0)}</small></button>`)}</div>` : null}
     <button class="link" onClick=${onCerca}>🔎 Cerca o scrivi</button>
   </section>`;
