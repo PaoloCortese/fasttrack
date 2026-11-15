@@ -7,7 +7,7 @@ import { html, render, useState, useEffect, useRef } from 'https://cdn.jsdelivr.
 import { auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, Bytes } from './firebase.js';
 import * as M from './motore.js';
 
-const VERSIONE = '2.2 · 15/11/2026';
+const VERSIONE = '2.3 · 15/11/2026';
 const numIt = v => { const n = Number(String(v ?? '').trim().replace(/\s/g, '').replace(',', '.')); return isFinite(n) && String(v ?? '').trim() !== '' ? n : null; };
 
 // ---------- foto del pasto: rimpicciolite sul telefono (800 px) e tenute nel diario ----------
@@ -62,22 +62,55 @@ function Login() {
 }
 
 // ---------- OGGI ----------
-function Budget({ n }) {
+function Pallino({ x }) {
+  const segno = { verde: '✓', giallo: '!', rosso: '✕', vuoto: '–', futuro: '', oggi: '' }[x.stato];
+  const testo = { verde: 'nel budget', giallo: 'poco sopra', rosso: 'sopra', vuoto: 'non registrato', futuro: 'da fare', oggi: 'oggi' }[x.stato];
+  return html`<span class="pallino ${x.stato} ${x.oggi ? 'e-oggi' : ''}" role="img" aria-label=${`${x.giorno}: ${testo}${x.stato === 'verde' || x.stato === 'giallo' || x.stato === 'rosso' ? `, ${x.kcal} kcal` : ''}`}><span class="segno">${segno}</span><small>${x.giorno.slice(0, 2)}</small></span>`;
+}
+function rigaSfida(s) {
+  if (s.sabato) return 'Oggi è sabato: pesati nella scheda Peso, il bilancio parte da solo.';
+  if (s.recupero) return `−${M.kcalTxt(s.recupero.debito)} da recuperare · ${s.recupero.giorni > 1 ? `oggi e nei prossimi ${s.recupero.giorni - 1} giorni` : 'oggi'} ${M.kcalTxt(s.recupero.obiettivoGiorno)} kcal · ${s.recupero.minuti} min a piedi aiutano la bilancia`;
+  if (s.saldo > 0) return `+${M.kcalTxt(s.saldo)} da parte${s.fila >= 2 ? ` · ${s.fila} giorni di fila nel budget` : ''}`;
+  if (s.contati === 0) return 'Si parte: ogni giornata registrata mette o toglie dal salvadanaio.';
+  return 'In pari con l\'obiettivo';
+}
+function Budget({ n, s, onSfida }) {
   const pct = Math.min(100, n.mangiato / n.obiettivo * 100); const oltre = n.residuo < 0;
   const [info, setInfo] = useState(false);
   return html`<section class="card budget">
     <p class="etichetta">${oltre ? 'Oltre il budget' : 'Restano'}</p>
     <p class="grande ${oltre ? 'rosso' : ''}">${M.kcalTxt(Math.abs(n.residuo))} <small>kcal</small></p>
     <div class="barra ${oltre ? 'rossa' : ''}"><div style=${`width:${pct}%`}></div></div>
-    <div class="tre"><div><b>${M.kcalTxt(n.mangiato)}</b><span>mangiate</span></div><div><b>${M.kcalTxt(n.obiettivo)}</b><span>obiettivo</span></div><div><b>${M.kcalTxt(n.deficitOggi)}</b><span>deficit oggi</span></div></div>
+    <div class="tre"><div><b>${M.kcalTxt(n.mangiato)}</b><span>mangiate</span></div><div><b>${M.kcalTxt(n.obiettivo)}</b><span>obiettivo${n.recuperoOggi ? html`<br/>(${M.kcalTxt(n.obiettivoBase)} − ${n.recuperoOggi} recupero)` : ''}</span></div><div><b>${s ? (s.saldo > 0 ? '+' : s.saldo < 0 ? '−' : '') + M.kcalTxt(Math.abs(s.saldo)) : '—'}</b><span>settimana</span></div></div>
+    ${s ? html`<button class="fascia-sfida" onClick=${onSfida} aria-label="Apri la sfida della settimana">
+      <span class="riga"><b>Sfida · sabato ${s.sabatoPesata.slice(8, 10)}${s.pesoObiettivo ? ` → ${M.kgTxt(s.pesoObiettivo)} kg` : ''}</b><span aria-hidden="true">›</span></span>
+      <span class="pallini">${s.pallini.map(x => html`<${Pallino} x=${x} />`)}</span>
+      <span class="riga-sfida">${rigaSfida(s)}</span>
+      ${s.previsione ? html`<span class="riga-sfida">Se continui così: sabato <b>${M.kgTxt(s.previsione)} kg</b></span>` : null}
+    </button>` : null}
     <button class="link" onClick=${() => setInfo(!info)} aria-expanded=${info}>${info ? 'Nascondi i conti' : 'Da dove vengono i numeri'}</button>
     ${info ? html`<ul class="conti">
       <li>Peso di tendenza <b>${M.kgTxt(n.tendenza.kg)} kg</b> (${n.tendenza.metodo})</li>
       <li>Metabolismo basale <b>${M.kcalTxt(n.basale.valore)}</b> kcal — Mifflin-St Jeor: ${n.basale.formula}</li>
       <li>Fabbisogno <b>${M.kcalTxt(n.fabbisogno.valore)}</b> kcal — ${n.fabbisogno.fonte}</li>
-      <li>Obiettivo <b>${M.kcalTxt(n.obiettivo)}</b> = ${n.obiettivoNota}. Mai sotto il basale.</li>
+      <li>Obiettivo <b>${M.kcalTxt(n.obiettivoBase)}</b> = ${n.obiettivoNota}. Mai sotto il basale.</li>
       <li>L'attività non si aggiunge al budget: fa deficit in più.</li></ul>` : null}
   </section>`;
+}
+
+function SfidaSheet({ s, onClose }) {
+  return html`<${Sheet} titolo="La sfida della settimana" onClose=${onClose}>
+    <p class="piccolo">Da sabato ${M.dataBreve(s.inizio).slice(4)} a venerdì ${M.dataBreve(s.fine).slice(4)} · pesata sabato ${M.dataBreve(s.sabatoPesata).slice(4)}</p>
+    <div class="pallini grandi">${s.pallini.map(x => html`<${Pallino} x=${x} />`)}</div>
+    <ul class="conti">
+      ${s.pesoObiettivo ? html`<li>Obiettivo di sabato: <b>${M.kgTxt(s.pesoObiettivo)} kg</b> di tendenza (partenza ${s.tendenzaInizio ? M.kgTxt(s.tendenzaInizio.kg) : '—'} kg${s.inGioco < 7 ? `, ${s.inGioco} giorni in gioco questa settimana` : ''}).</li>` : null}
+      <li>${s.previsione ? html`Se continui così: <b>${M.kgTxt(s.previsione)} kg</b> sabato.` : 'La previsione compare dal terzo giorno registrato.'}</li>
+      <li>Salvadanaio: <b>${s.saldo > 0 ? '+' : s.saldo < 0 ? '−' : ''}${M.kcalTxt(Math.abs(s.saldo))} kcal</b> (obiettivo ${M.kcalTxt(s.obiettivo)} meno quello che hai mangiato, giorno per giorno).</li>
+      ${s.recupero ? html`<li><b>Come rientri:</b> ${s.recupero.giorni > 1 ? `oggi e nei prossimi ${s.recupero.giorni - 1} giorni` : 'oggi'} l'obiettivo scende a ${M.kcalTxt(s.recupero.obiettivoGiorno)} kcal (mai sotto il basale, ${M.kcalTxt(s.basale)}). ${s.recupero.minuti} minuti a piedi in più al giorno aiutano la bilancia.${s.recupero.siLasciaAndare ? ` Il resto (${M.kcalTxt(s.recupero.siLasciaAndare)} kcal) si lascia andare: conta il peso di sabato.` : ''}</li>` : null}
+      ${s.lasciato ? html`<li>Lasciato andare questa settimana: ${M.kcalTxt(s.lasciato)} kcal. Va bene così.</li>` : null}
+    </ul>
+    <p class="piccolo">✓ nel budget · ! poco sopra (fino a 300) · ✕ sopra · – non registrato o manca un pasto (non conta). Le giornate contano da sole quando sono passate.</p>
+  <//>`;
 }
 
 function Digiuno({ stato, aggiorna }) {
@@ -107,7 +140,7 @@ function Digiuno({ stato, aggiorna }) {
       <div class="azioni">${orario}<button class="primario" onClick=${apri}>${chiediOra ? 'Aperta a quest\'ora' : 'Apro la finestra ora'}</button>${linkOra}</div></section>`;
   }
   return html`<section class="card"><div class="riga"><h3>🍽 Finestra aperta</h3>${stato?.apertaAlle ? html`<span class="pill">dalle ${M.oraRoma(new Date(stato.apertaAlle))}</span>` : null}</div>
-    <p class="piccolo">Riparte da solo quando chiudi la giornata, dall'ora dell'ultimo pasto.</p>
+    <p class="piccolo">Quando hai finito di mangiare, fallo partire. Se te ne dimentichi, domattina parte da solo dall'ultimo pasto.</p>
     <div class="azioni">${orario}<button class="primario" onClick=${inizia}>${chiediOra ? 'Iniziato a quest\'ora' : 'Inizia il digiuno ora'}</button>${linkOra}</div></section>`;
 }
 
@@ -170,6 +203,17 @@ async function chiudiDigiunoSeServe(data) {
   const fine = Date.now(); const ore = M.r1((fine - s.inizio) / 3600000);
   await addDoc(collection(db, 'digiuni'), { inizio: s.inizio, fine, ore, data: M.oggiRoma(new Date(s.inizio)), completato: ore >= M.ORE_DIGIUNO, chiusoDa: 'primo pasto' });
   await setDoc(doc(db, 'stato', 'digiuno'), { inizio: null, apertaAlle: fine });
+}
+/** La mattina, se il digiuno non è partito e oggi non hai ancora mangiato, parte da solo dall'ultimo pasto di ieri. */
+async function digiunoDelMattino(stato, pastiOggi) {
+  if (stato?.inizio || (pastiOggi || []).length) return false;
+  const ieri = M.addGiorni(M.oggiRoma(), -1);
+  const ult = (await M.pastiDel(ieri)).filter(p => p.fonte !== 'gemini_storico' && p.ora).map(p => p.ora).sort().pop();
+  if (!ult) return false;
+  const [h, m] = ult.split(':').map(Number); const d = new Date(); d.setDate(d.getDate() - 1); d.setHours(h, m, 0, 0);
+  if (stato?.apertaAlle && stato.apertaAlle > d.getTime()) return false;
+  await setDoc(doc(db, 'stato', 'digiuno'), { inizio: d.getTime(), apertaAlle: null, avviatoDa: 'mattino (ultimo pasto di ieri)' });
+  return true;
 }
 /** E quando si chiude la giornata riparte, dall'ora dell'ultimo pasto di oggi. */
 async function avviaDigiunoDaUltimoPasto(pasti) {
@@ -432,33 +476,33 @@ function AttivitaSheet({ data, g, onClose, aggiorna }) {
     <button class="primario largo" onClick=${salva}>Salva</button><//>`;
 }
 
-function ChiudiSheet({ data, n, onClose, aggiorna }) {
-  const chiudi = async esito => { await aggiornaGiorno(data, { chiusa: true, esito }); if (data === M.oggiRoma()) await avviaDigiunoDaUltimoPasto(n.pasti); aggiorna(); onClose(); };
-  const ult = [...(n.pasti || [])].map(p => p.ora).filter(Boolean).sort().pop();
-  return html`<${Sheet} titolo="Chiudi la giornata" onClose=${onClose}>
-    <p>Mangiate <b>${M.kcalTxt(n.mangiato)}</b> kcal su ${M.kcalTxt(n.obiettivo)} · deficit di oggi <b>${M.kcalTxt(n.deficitOggi)}</b> kcal.</p>
-    ${n.mangiato < n.basale.valore - 300 ? html`<p class="avviso">Sei molto sotto il basale: non è un successo, si perde muscolo. Se è un errore di registrazione, correggi prima di chiudere.</p>` : null}
-    <p class="piccolo">Il digiuno parte da solo ${ult ? `dalle ${ult}, l'ora dell'ultimo pasto` : 'da adesso'}. Solo le giornate chiuse contano per il bilancio del sabato.</p>
-    <div class="azioni"><button class="primario" onClick=${() => chiudi(n.residuo >= 0 ? 'rispettata' : 'sopra')}>Chiudi${n.residuo < 0 ? ' (sopra il budget)' : ''}</button><button class="secondario" onClick=${() => chiudi('sgarro')}>Chiudi come sgarro</button></div>
-    ${n.giorno?.chiusa ? html`<button class="link" onClick=${async () => { await aggiornaGiorno(data, { chiusa: false }); aggiorna(); onClose(); }}>Riapri la giornata</button>` : null}
-  <//>`;
-}
-
 function Oggi({ tick, aggiorna, greg, setGreg }) {
   const data = M.oggiRoma();
-  const [n, setN] = useState(null); const [dig, setDig] = useState(null); const [err, setErr] = useState('');
+  const [n0, setN] = useState(null); const [dig, setDig] = useState(null); const [s, setS] = useState(null); const [err, setErr] = useState('');
   const [sheet, setSheet] = useState(null);
-  useEffect(() => { Promise.all([M.numeri(data), M.statoDigiuno()]).then(([a, b]) => { setN(a); setDig(b); setErr(''); }).catch(e => setErr('Dati non raggiungibili: ' + (e?.message || e))); }, [tick]);
+  useEffect(() => { (async () => {
+    try {
+      const [a, b, c] = await Promise.all([M.numeri(data), M.statoDigiuno(), M.sfida(data)]);
+      if (await digiunoDelMattino(b, a.pasti)) { aggiorna(); return; }
+      setN(a); setDig(b); setS(c); setErr('');
+    } catch (e) { setErr('Dati non raggiungibili: ' + (e?.message || e)); }
+  })(); }, [tick]);
   if (err) return html`<${Errore} e=${err} />`;
-  if (!n) return html`<p class="caricamento">Carico…</p>`;
+  if (!n0) return html`<p class="caricamento">Carico…</p>`;
+  // UN NUMERO SOLO: se c'è un recupero in corso, l'obiettivo di oggi è già ridotto (mai sotto il basale)
+  const ob = s?.recupero ? s.recupero.obiettivoGiorno : n0.obiettivo;
+  const n = { ...n0, obiettivoBase: n0.obiettivo, obiettivo: ob, residuo: ob - n0.mangiato, recuperoOggi: n0.obiettivo - ob };
+  const ieri = s?.pallini.find(x => x.data === M.addGiorni(data, -1));
+  const consigli = M.consigli(n, dig);
+  if (ieri && ieri.stato === 'vuoto' && ieri.kcal > 0) consigli.unshift({ tipo: 'allarme', testo: `Ieri risultano solo ${M.kcalTxt(ieri.kcal)} kcal: manca un pasto? Aggiungilo da Diario, sennò la giornata non conta.` });
   const g = n.giorno || {};
   const acqua = async () => { await aggiornaGiorno(data, { acquaL: M.r1((g.acquaL || 0) + 0.25) }); aggiorna(); };
   const salvaVoceRapida = async v => { setSheet({ tipo: 'salvo' }); await setDoc(doc(db, 'preferiti', v._voce.id), { usi: (v._voce.usi || 0) + 1 }, { merge: true }); const { _voce, ...r } = v; await salvaPasto(data, [r]); setSheet(null); aggiorna(); };
   return html`
-    <${Budget} n=${n} />
+    <${Budget} n=${n} s=${s} onSfida=${() => setSheet({ tipo: 'sfida' })} />
     ${greg && !greg.aperto ? html`<button class="banner-greg" onClick=${() => setGreg(x => ({ ...x, aperto: true }))}>${greg.stato === 'attesa' ? '📷 Greg sta guardando la foto…' : '📷 Greg ha risposto · apri'}</button>` : null}
     <${BloccoFoto} setGreg=${setGreg} tick=${tick} onVoce=${x => setSheet({ tipo: 'voce', voce: x })} onCerca=${() => setSheet({ tipo: 'pasto' })} />
-    <${Consiglio} lista=${M.consigli(n, dig)} />
+    <${Consiglio} lista=${consigli} />
     <section class="card"><h3>Pasti di oggi</h3>
       ${n.pasti.length ? html`<ul class="pasti">${n.pasti.map(p => html`<li><button onClick=${() => setSheet({ tipo: 'pasto', pasto: p })}>
           <span class="ora">${p.ora || ''}</span><span class="desc">${p.descrizione}${p.foto?.length ? ' 📷' : ''}${p.aderenza === 'sgarro' ? html` <em class="sgarro">sgarro</em>` : ''}</span><b>${M.kcalTxt(p.kcal)}</b></button></li>`)}</ul>`
@@ -469,13 +513,12 @@ function Oggi({ tick, aggiorna, greg, setGreg }) {
       <div class="tre"><div><b>${g.passi != null ? M.kcalTxt(g.passi) : '—'}</b><span>passi</span></div><div><b>${g.kcalAttive != null ? M.kcalTxt(g.kcalAttive) : '—'}</b><span>kcal attive</span></div><div><b>${g.acquaL != null ? String(g.acquaL).replace('.', ',') : '0'} L</b><span>acqua</span></div></div>
       <div class="azioni"><button class="secondario" onClick=${acqua}>💧 + 0,25 L</button></div>
     </section>
-    <button class="${g.chiusa ? 'secondario' : 'primario'} largo" onClick=${() => setSheet({ tipo: 'chiudi' })}>${g.chiusa ? `✓ Giornata chiusa (${g.esito || ''})` : 'Chiudi la giornata'}</button>
     ${greg && greg.aperto ? html`<${GregSheet} greg=${greg} setGreg=${setGreg} n=${n} aggiorna=${aggiorna} onCorreggi=${(v, foto) => setSheet({ tipo: 'pasto', iniziale: v || { descrizione: '', kcal: '', fonte: 'a_mano' }, foto })} />` : null}
     ${sheet?.tipo === 'voce' ? html`<${Sheet} titolo="Il tuo piatto" onClose=${() => setSheet(null)}><${Quantita} voce=${sheet.voce} onSalva=${salvaVoceRapida} onAnnulla=${() => setSheet(null)} /><//>` : null}
     ${sheet?.tipo === 'salvo' ? html`<p class="caricamento">Salvo…</p>` : null}
     ${sheet?.tipo === 'pasto' ? html`<${PastoSheet} pasto=${sheet.pasto} iniziale=${sheet.iniziale} fotoIniziale=${sheet.foto} data=${data} onClose=${() => setSheet(null)} aggiorna=${aggiorna} />` : null}
     ${sheet?.tipo === 'attivita' ? html`<${AttivitaSheet} data=${data} g=${n.giorno} onClose=${() => setSheet(null)} aggiorna=${aggiorna} />` : null}
-    ${sheet?.tipo === 'chiudi' ? html`<${ChiudiSheet} data=${data} n=${n} onClose=${() => setSheet(null)} aggiorna=${aggiorna} />` : null}`;
+    ${sheet?.tipo === 'sfida' && s ? html`<${SfidaSheet} s=${s} onClose=${() => setSheet(null)} />` : null}`;
 }
 
 // ---------- DIARIO ----------
@@ -494,13 +537,14 @@ function Diario({ tick, aggiorna }) {
   const [righe, setRighe] = useState(null); const [n, setN] = useState(null); const [aperto, setAperto] = useState(null);
   useEffect(() => { Promise.all([M.diario(M.oggiRoma(), 14), M.numeri()]).then(([d, x]) => { setRighe(d.reverse()); setN(x); }); }, [tick]);
   if (!righe) return html`<p class="caricamento">Carico…</p>`;
-  const chiusi7 = righe.slice(0, 7).filter(r => r.chiusa && r.kcal > 0);
+  const conta = r => M.giornoConta(r, M.oggiRoma(), n.basale.valore);
+  const chiusi7 = righe.slice(0, 8).filter(conta).slice(0, 7);
   const media = chiusi7.length ? chiusi7.reduce((s, r) => s + r.kcal, 0) / chiusi7.length : null;
-  let serie = 0; for (const r of righe) { if (r.data === M.oggiRoma() && !r.chiusa) continue; if (r.chiusa && r.esito === 'rispettata') serie++; else break; }
+  let serie = 0; for (const r of righe) { if (r.data >= M.oggiRoma()) continue; if (conta(r) && r.kcal <= n.obiettivo) serie++; else break; }
   return html`
     <section class="card"><div class="tre">
-      <div><b>${media != null ? M.kcalTxt(media) : '—'}</b><span>media kcal (7 gg chiusi)</span></div>
-      <div><b>${chiusi7.length}/7</b><span>giornate chiuse</span></div>
+      <div><b>${media != null ? M.kcalTxt(media) : '—'}</b><span>media kcal (ultimi giorni registrati)</span></div>
+      <div><b>${chiusi7.length}/7</b><span>giornate registrate</span></div>
       <div><b>${serie}</b><span>di fila nel budget</span></div></div></section>
     <ul class="diario">${righe.map(r => {
       const pct = Math.min(100, r.kcal / n.obiettivo * 100); const sopra = r.kcal > n.obiettivo;
@@ -508,7 +552,7 @@ function Diario({ tick, aggiorna }) {
         <span class="giorno">${M.dataBreve(r.data)}</span>
         <span class="mini-barra ${sopra ? 'rossa' : ''}"><span style=${`width:${pct}%`}></span></span>
         <span class="kcal">${r.kcal ? M.kcalTxt(r.kcal) : '—'}</span>
-        <span class="extra">${r.passi != null ? `${M.kcalTxt(r.passi)} passi` : ''}${r.pesata ? ` · ${M.kgTxt(r.pesata)} kg` : ''}${r.chiusa ? (r.esito === 'rispettata' ? ' · ✓' : ` · ${r.esito}`) : ''}</span></button></li>`;
+        <span class="extra">${r.passi != null ? `${M.kcalTxt(r.passi)} passi` : ''}${r.pesata ? ` · ${M.kgTxt(r.pesata)} kg` : ''}${r.soloStorico ? ' · stima Gemini' : ''}</span></button></li>`;
     })}</ul>
     ${aperto ? html`<${GiornoSheet} data=${aperto} onClose=${() => setAperto(null)} aggiorna=${aggiorna} />` : null}`;
 }
@@ -541,9 +585,10 @@ function Peso({ tick, aggiorna }) {
   }, [tick]);
   const salva = async () => {
     const v = numIt(kg); if (v == null || v < 40 || v > 200) { setErr('Scrivi il peso in kg, es. 86,4'); return; }
-    await setDoc(doc(db, 'pesate', M.oggiRoma()), { data: M.oggiRoma(), kg: M.r1(v), fonte: 'Fast Track', ts: Date.now() }); setKg(''); setErr(''); aggiorna();
+    await setDoc(doc(db, 'pesate', M.oggiRoma()), { data: M.oggiRoma(), kg: M.r1(v), fonte: 'Fast Track', ts: Date.now() }); setKg(''); setErr('');
+    setLavoro(true); try { const b = await M.bilancioSeTocca(M.oggiRoma()); if (b) setBil(b); } catch (e) { setErr('Bilancio non riuscito: ' + (e?.message || e)); } setLavoro(false);
+    aggiorna();
   };
-  const bilancio = async () => { setLavoro(true); try { setBil(await M.bilancioSettimana()); aggiorna(); } catch (e) { setErr(String(e?.message || e)); } setLavoro(false); };
   const sabato = M.giornoSettimana(M.oggiRoma()) === 'sab';
   if (!lista) return html`<p class="caricamento">Carico…</p>`;
   const serie = M.serieTendenza(lista);
@@ -557,15 +602,16 @@ function Peso({ tick, aggiorna }) {
     </section>
     <section class="card"><h3>Ultimi 90 giorni</h3><${Grafico} serie=${serie} /><p class="legenda"><span class="l-punto"></span> pesate <span class="l-linea"></span> tendenza (media di 7 giorni)</p></section>
     <section class="card ${sabato ? 'evidenza' : ''}"><h3>Bilancio della settimana</h3>
-      <p class="piccolo">${sabato ? 'Oggi è sabato: pesati, poi fai il bilancio.' : 'Si fa il sabato, dopo la pesata.'} Il codice ritara il fabbisogno sul calo reale della tendenza (con almeno 5 giornate chiuse) e fissa l'obiettivo della settimana, mai sotto il basale.</p>
-      <button class="${sabato ? 'primario' : 'secondario'} largo" disabled=${lavoro} onClick=${bilancio}>${lavoro ? 'Calcolo…' : 'Fai il bilancio'}</button>
+      ${lavoro ? html`<p class="piccolo">Faccio il bilancio…</p>` : null}
       ${bil ? html`<ul class="conti">
-        <li>Settimana ${bil.periodo}: ${bil.giorniCompleti} giornate chiuse</li>
+        ${bil.sfida?.obiettivo ? html`<li>${bil.sfida.presa ? '✓ Obiettivo preso' : 'Obiettivo non preso'}: ${bil.sfida.arrivato ? M.kgTxt(bil.sfida.arrivato) : '—'} kg su ${M.kgTxt(bil.sfida.obiettivo)} · salvadanaio ${bil.sfida.salvadanaio > 0 ? '+' : ''}${M.kcalTxt(bil.sfida.salvadanaio)}</li>` : null}
+        <li>Settimana ${bil.periodo}: ${bil.giorniCompleti} giornate registrate</li>
         ${bil.calcolo ? html`<li>Mangiato in media <b>${M.kcalTxt(bil.calcolo.mediaMangiato)}</b> kcal · tendenza ${bil.calcolo.caloKg >= 0 ? '−' : '+'}${M.kgTxt(Math.abs(bil.calcolo.caloKg))} kg · deficit reale <b>${M.kcalTxt(bil.calcolo.deficitRealeGiorno)}</b> kcal al giorno</li>` : html`<li>${bil.nonRitarato}</li>`}
-        <li>Fabbisogno: <b>${M.kcalTxt(bil.fabbisognoNuovo)}</b> kcal (prima ${M.kcalTxt(bil.fabbisognoPrima)})</li>
-        <li>Obiettivo nuovo: <b>${M.kcalTxt(bil.obiettivo)}</b> kcal al giorno (basale ${M.kcalTxt(bil.basale.valore)})</li>
+        <li>Fabbisogno: <b>${M.kcalTxt(bil.fabbisognoNuovo || bil.fabbisogno)}</b> kcal (prima ${M.kcalTxt(bil.fabbisognoPrima)})</li>
+        <li>Obiettivo della nuova settimana: <b>${M.kcalTxt(bil.obiettivo || bil.obiettivoKcal)}</b> kcal al giorno (basale ${M.kcalTxt(bil.basale.valore)})</li>
         ${bil.pesoObiettivo ? html`<li>Peso obiettivo per sabato prossimo: <b>${M.kgTxt(bil.pesoObiettivo)} kg</b> di tendenza</li>` : null}</ul>`
-      : ultima ? html`<p class="piccolo">Ultimo bilancio ${M.dataBreve(ultima.data)}: obiettivo ${M.kcalTxt(ultima.obiettivoKcal)} kcal.</p>` : null}
+      : ultima ? html`<p class="piccolo">Ultimo bilancio ${M.dataBreve(ultima.data)}: obiettivo ${M.kcalTxt(ultima.obiettivoKcal)} kcal${ultima.pesoObiettivo ? `, sabato ${M.kgTxt(ultima.pesoObiettivo)} kg` : ''}.</p>`
+      : html`<p class="piccolo">Parte da solo quando salvi la pesata del sabato (o della domenica, se il sabato salti).</p>`}
     </section>
     <section class="card"><h3>Pesate</h3><ul class="semplice">${[...lista].reverse().slice(0, 20).map(p => html`<li><span>${M.dataBreve(p.data)}</span><b>${M.kgTxt(p.kg)} kg</b><small>${p.fonte || ''}</small></li>`)}</ul></section>`;
 }

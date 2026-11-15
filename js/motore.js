@@ -172,34 +172,122 @@ export async function diario(a, n) {
     const pp = pasti.filter(x => x.data === d);
     const g = gS.docs.find(x => x.id === d)?.data() || null;
     const w = wS.docs.find(x => x.data().data === d)?.data() || null;
-    out.push({ data: d, kcal: r0(pp.reduce((s, x) => s + (Number(x.kcal) || 0), 0)), pasti: pp.length, sgarri: pp.filter(x => x.aderenza === 'sgarro').length,
+    out.push({ data: d, kcal: r0(pp.reduce((s, x) => s + (Number(x.kcal) || 0), 0)), pasti: pp.length, sgarri: pp.filter(x => x.aderenza === 'sgarro').length, soloStorico: pp.length > 0 && pp.every(x => x.fonte === 'gemini_storico'),
       passi: g?.passi ?? null, kcalAttive: g?.kcalAttive ?? null, acquaL: g?.acquaL ?? null, chiusa: !!g?.chiusa, esito: g?.esito || null, pesata: w?.kg ?? null });
   }
   return out;
 }
 
-// ---------- il rito del sabato: ritaratura sul calo REALE ----------
-export async function bilancioSettimana(fine = oggiRoma()) {
-  const inizio = addGiorni(fine, -7);
-  const giorni = await diario(addGiorni(fine, -1), 7);
-  const completi = giorni.filter(g => g.chiusa && g.kcal > 0);
-  const [tI, tF, p, prima] = await Promise.all([pesoTendenza(inizio), pesoTendenza(fine), leggiProfilo(), numeri(fine)]);
-  const out = { periodo: `${dataBreve(inizio)} → ${dataBreve(addGiorni(fine, -1))}`, giorniCompleti: completi.length, tendenzaInizio: tI, tendenzaFine: tF, fabbisognoPrima: prima.fabbisogno.valore };
+// ---------- quando una giornata CONTA (regola del 15/11, dal facilitatore «zero attriti») ----------
+// Non serve più chiuderla: conta da sola quando è passata, se è credibile, cioè con almeno basale − 300 kcal registrate
+// (sotto, probabilmente manca un pasto: pallino grigio, fuori dal salvadanaio e dalla ritaratura). Lo storico di Gemini non conta.
+export const MARGINE_CREDIBILE = 300;
+export function giornoConta(g, oggi, basale) {
+  if (!g || g.soloStorico) return false;
+  if (g.data >= oggi && !g.chiusa) return false;
+  return g.kcal >= basale - MARGINE_CREDIBILE;
+}
+
+// ---------- il rito del sabato: ritaratura sul calo REALE (parte da sola con la pesata del sabato) ----------
+export async function bilancioSettimana(sabato, dataPesata = sabato, forza = false) {
+  const gia = await getDoc(doc(db, 'settimane', sabato));
+  if (gia.exists() && !forza) return { ...gia.data(), giaFatto: true };
+  const inizio = addGiorni(sabato, -7);
+  const [giorni, tI, tF, p, prima] = await Promise.all([diario(addGiorni(sabato, -1), 7), pesoTendenza(inizio), pesoTendenza(dataPesata), leggiProfilo(), numeri(sabato)]);
+  const basale = prima.basale.valore;
+  const completi = giorni.filter(g => giornoConta(g, sabato, basale));
+  const out = { periodo: `${dataBreve(inizio)} → ${dataBreve(addGiorni(sabato, -1))}`, giorniCompleti: completi.length, tendenzaInizio: tI, tendenzaFine: tF, fabbisognoPrima: prima.fabbisogno.valore };
   let nuovo = prima.fabbisogno.valore, fonte = prima.fabbisogno.fonte;
   if (completi.length >= MIN_GIORNI_RITARATURA && tI && tF) {
     const media = completi.reduce((s, g) => s + g.kcal, 0) / completi.length;
     const deltaKg = tI.kg - tF.kg;
     const reale = r0(media + deltaKg * KCAL_PER_KG / 7);
     nuovo = r0((prima.fabbisogno.valore + reale) / 2);
-    fonte = `ritarato il ${dataBreve(fine)}: mangiato in media ${kcalTxt(media)} kcal su ${completi.length} giorni, tendenza ${deltaKg >= 0 ? '−' : '+'}${kgTxt(Math.abs(deltaKg))} kg → fabbisogno reale ${kcalTxt(reale)}; media col precedente (${kcalTxt(prima.fabbisogno.valore)}) per non fare salti`;
+    fonte = `ritarato il ${dataBreve(sabato)}: mangiato in media ${kcalTxt(media)} kcal su ${completi.length} giorni, tendenza ${deltaKg >= 0 ? '−' : '+'}${kgTxt(Math.abs(deltaKg))} kg → fabbisogno reale ${kcalTxt(reale)}; media col precedente (${kcalTxt(prima.fabbisogno.valore)}) per non fare salti`;
     out.calcolo = { mediaMangiato: r0(media), caloKg: r1(deltaKg), fabbisognoReale: reale, deficitRealeGiorno: r0(deltaKg * KCAL_PER_KG / 7) };
   } else {
-    out.nonRitarato = `Servono almeno ${MIN_GIORNI_RITARATURA} giornate chiuse e una pesata a inizio e fine settimana: ${completi.length} chiuse${!tI || !tF ? ', e manca una pesata' : ''}. Il fabbisogno resta ${kcalTxt(nuovo)} kcal.`;
+    out.nonRitarato = `Servono almeno ${MIN_GIORNI_RITARATURA} giornate registrate per intero e una pesata a inizio e fine settimana: ${completi.length} giornate${!tI || !tF ? ', e manca una pesata' : ''}. Il fabbisogno resta ${kcalTxt(nuovo)} kcal.`;
   }
   const deficit = p.deficit || DEFICIT_STD;
-  const obiettivo = Math.max(prima.basale.valore, nuovo - deficit);
+  const obiettivo = Math.max(basale, nuovo - deficit);
   const pesoObiettivo = tF ? r1(tF.kg - deficit * 7 / KCAL_PER_KG) : null;
-  await setDoc(doc(db, 'profilo', 'paolo'), { fabbisogno: nuovo, fabbisognoFonte: fonte, fabbisognoDal: fine, obiettivoPesoSettimana: pesoObiettivo }, { merge: true });
-  await setDoc(doc(db, 'settimane', fine), { data: fine, ...out, fabbisogno: nuovo, fonte, basale: prima.basale, obiettivoKcal: obiettivo, pesoObiettivo, ts: Date.now() });
-  return { ...out, fabbisognoNuovo: nuovo, fonte, basale: prima.basale, obiettivo, pesoObiettivo };
+  // com'è andata la sfida: obiettivo della settimana appena chiusa contro la tendenza di oggi
+  const sfidaPrima = await sfida(addGiorni(sabato, -1)).catch(() => null);
+  out.sfida = sfidaPrima && sfidaPrima.contati > 0 ? { obiettivo: sfidaPrima.pesoObiettivo, arrivato: tF?.kg ?? null, salvadanaio: sfidaPrima.saldo, presa: !!(sfidaPrima.pesoObiettivo && tF && tF.kg <= sfidaPrima.pesoObiettivo) } : null;
+  await setDoc(doc(db, 'profilo', 'paolo'), { fabbisogno: nuovo, fabbisognoFonte: fonte, fabbisognoDal: sabato, obiettivoPesoSettimana: pesoObiettivo }, { merge: true });
+  const res = { data: sabato, dataPesata, ...out, fabbisogno: nuovo, fonte, basale: prima.basale, obiettivoKcal: obiettivo, pesoObiettivo, ts: Date.now() };
+  await setDoc(doc(db, 'settimane', sabato), res);
+  return { ...res, fabbisognoNuovo: nuovo, obiettivo };
+}
+/** Pesata salvata: se è sabato (o domenica, quando il sabato non ci si è pesati) parte da solo il bilancio della settimana. */
+export async function bilancioSeTocca(dataPesata) {
+  const g = giornoSettimana(dataPesata);
+  if (g !== 'sab' && g !== 'dom') return null;
+  const sabato = sabatoDiInizio(dataPesata);
+  if (g === 'dom') { const s = await getDoc(doc(db, 'pesate', sabato)); if (s.exists()) return null; }
+  return bilancioSettimana(sabato, dataPesata);
+}
+
+// ---------- LA SFIDA DELLA SETTIMANA (15/11/2026: «un gioco, una sfida; se sgarro devo vedere come recupero») ----------
+// Rivista col web designer e col facilitatore. Settimana sabato → venerdì, pesata il sabato dopo.
+// - Obiettivo del sabato sul PESO DI TENDENZA: −deficit × giorni in gioco / 7700 (la prima settimana conta solo dal primo
+//   giorno registrato).
+// - Salvadanaio: somma di (obiettivo − mangiato) delle giornate che contano. Il credito vale solo per giornate credibili.
+// - Recupero: l'obiettivo dei giorni seguenti scende al massimo fino al BASALE; in al massimo 3 giorni; quello che avanza
+//   si lascia andare in silenzio. La camminata aiuta la bilancia ma non entra nel salvadanaio.
+export const GIORNI_RECUPERO = 3;
+export const KCAL_MINUTO_CAMMINATA = 5;   // camminata a passo svelto, circa, per ~86 kg
+export const SOGLIA_GIALLO = 300;
+
+export function sabatoDiInizio(iso) {
+  const [y, m, g] = iso.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, g)).getUTCDay(); // 0 domenica … 6 sabato
+  return addGiorni(iso, -((dow + 1) % 7));
+}
+
+export async function sfida(oggi = oggiRoma()) {
+  const inizio = sabatoDiInizio(oggi), fine = addGiorni(inizio, 6), sabatoPesata = addGiorni(inizio, 7);
+  const [giorni, tI, n] = await Promise.all([diario(fine, 7), pesoTendenza(inizio), numeri(oggi)]);
+  const obiettivo = n.obiettivo, fabb = n.fabbisogno.valore, basale = n.basale.valore, deficit = n.deficit;
+  const margine = Math.max(0, obiettivo - basale);           // quanto si può togliere a tavola in un giorno
+  // il salvadanaio, giorno per giorno: il debito più vecchio di 3 giorni si lascia andare
+  let saldo = 0, debitoDal = null, lasciato = 0, contati = 0;
+  const pallini = giorni.map((g, i) => {
+    const conta = giornoConta(g, oggi, basale);
+    let stato;
+    if (g.data > oggi) stato = 'futuro';
+    else if (g.data === oggi && !conta) stato = 'oggi';
+    else if (!conta) stato = 'vuoto';
+    else {
+      contati++;
+      const d = g.kcal - obiettivo;
+      stato = d > SOGLIA_GIALLO ? 'rosso' : d > 0 ? 'giallo' : 'verde';
+      saldo += obiettivo - g.kcal;
+    }
+    if (saldo < 0 && debitoDal == null) debitoDal = i;
+    if (saldo >= 0) debitoDal = null;
+    if (g.data < oggi && saldo < 0 && debitoDal != null && i - debitoDal >= GIORNI_RECUPERO) { lasciato += -saldo; saldo = 0; debitoDal = null; }
+    return { data: g.data, giorno: giornoSettimana(g.data), stato, kcal: g.kcal, oggi: g.data === oggi };
+  });
+  saldo = Math.round(saldo);
+  const aperti = giorni.filter(g => g.data >= oggi && !giornoConta(g, oggi, basale)).length;
+  let recupero = null;
+  if (saldo < 0 && aperti > 0 && margine > 0) {
+    const iDebito = debitoDal ?? 0, iOggi = giorni.findIndex(g => g.data === oggi);
+    const restano = Math.max(1, Math.min(aperti, GIORNI_RECUPERO - Math.max(0, iOggi - iDebito - 1)));
+    const perGiorno = Math.min(margine, Math.ceil(-saldo / restano));
+    const residuo = Math.max(0, -saldo - perGiorno * restano);
+    recupero = { debito: -saldo, giorni: restano, togliOggi: perGiorno, obiettivoGiorno: obiettivo - perGiorno,
+      minuti: Math.min(60, Math.max(20, Math.ceil(residuo / restano / KCAL_MINUTO_CAMMINATA / 10) * 10)), siLasciaAndare: residuo };
+  }
+  // giorni in gioco: dal primo giorno registrato della settimana (la prima settimana parte a metà)
+  const primo = pallini.findIndex(x => x.stato !== 'vuoto' && x.stato !== 'futuro');
+  const inGioco = primo < 0 ? 7 - pallini.filter(x => x.data < oggi).length : 7 - primo;
+  const pesoObiettivo = tI ? r1(tI.kg - deficit * inGioco / KCAL_PER_KG) : null;
+  const defContati = giorni.filter(g => giornoConta(g, oggi, basale)).reduce((s, g) => s + (fabb - g.kcal), 0);
+  const defAperti = aperti * (fabb - obiettivo) + (recupero ? recupero.togliOggi * recupero.giorni : 0);
+  const previsione = tI && contati >= 3 ? r1(tI.kg - (defContati + defAperti) / KCAL_PER_KG) : null;
+  let fila = 0; for (const x of [...pallini].reverse()) { if (x.stato === 'futuro' || x.stato === 'oggi') continue; if (x.stato === 'verde') fila++; else break; }
+  return { inizio, fine, sabatoPesata, pallini, saldo, lasciato, recupero, obiettivo, basale, pesoObiettivo, previsione, tendenzaInizio: tI,
+    contati, inGioco, fila, sabato: giornoSettimana(oggi) === 'sab' };
 }
