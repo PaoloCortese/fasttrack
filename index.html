@@ -187,6 +187,10 @@
     .bolla.sua { align-self: flex-start; background: var(--accento-chiaro); color: var(--testo); border-bottom-left-radius: 4px; }
     .chat-scrivi { display: flex; gap: 8px; align-items: flex-end; padding: 10px 0 calc(env(safe-area-inset-bottom) + 12px); border-top: 1px solid var(--linea); background: var(--carta); }
     .chat-scrivi textarea { flex: 1; resize: none; min-height: 48px; }
+    .tasti-foto { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+    .tasto-rullino { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 64px; border-radius: 16px; border: 2px solid var(--accento); background: var(--carta); color: var(--accento); font-size: 17px; font-weight: 700; cursor: pointer; }
+    .tasto-rullino span { font-size: 22px; }
+    .tasto-rullino input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .grafico { width: 100%; height: auto; display: block; }
     .grafico .asse { font-size: 10px; fill: var(--testo-2); }
     .grafico .griglia-l { stroke: var(--linea); }

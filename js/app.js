@@ -7,7 +7,7 @@ import { html, render, useState, useEffect, useRef } from 'https://cdn.jsdelivr.
 import { auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, Bytes } from './firebase.js';
 import * as M from './motore.js';
 
-const VERSIONE = '2.5 · 15/11/2026';
+const VERSIONE = '2.6 · 15/11/2026';
 const numIt = v => { const n = Number(String(v ?? '').trim().replace(/\s/g, '').replace(',', '.')); return isFinite(n) && String(v ?? '').trim() !== '' ? n : null; };
 
 // ---------- foto del pasto: rimpicciolite sul telefono (800 px) e tenute nel diario ----------
@@ -386,8 +386,11 @@ function BloccoFoto({ setGreg, onVoce, onCerca, tick }) {
     avviaGreg(setGreg, foto, '');
   };
   return html`<section class="card blocco-foto">
-    <label class="tasto-foto"><input type="file" accept="image/*" capture="environment" onChange=${scatto} /><span aria-hidden="true">📷</span> Fotografa</label>
-    <p class="sotto-foto">piatto, vetrina, menu, passi o bilancia · Greg ≈ 1–2 cent · <label class="link-galleria">dalla galleria<input type="file" accept="image/*" onChange=${scatto} /></label></p>
+    <div class="tasti-foto">
+      <label class="tasto-foto"><input type="file" accept="image/*" capture="environment" onChange=${scatto} /><span aria-hidden="true">📷</span> Fotografa</label>
+      <label class="tasto-rullino"><input type="file" accept="image/*" onChange=${scatto} /><span aria-hidden="true">🖼</span> Rullino</label>
+    </div>
+    <p class="sotto-foto">piatto, vetrina, menu, screenshot dei passi o bilancia · Greg ≈ 1–2 cent</p>
     ${frequenti.length ? html`<p class="piccolo">I tuoi piatti · gratis</p><div class="fotine">${frequenti.map(x => html`<button onClick=${() => onVoce(x)}><img src=${miniUrl(x.mini)} alt="" /><span>${x.nome.length > 22 ? x.nome.slice(0, 21) + '…' : x.nome}</span><small>${M.kcalTxt(x.kcalPezzo ?? x.kcal100 ?? 0)}</small></button>`)}</div>` : null}
     <button class="link" onClick=${onCerca}>🔎 Cerca o scrivi</button>
   </section>`;
