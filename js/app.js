@@ -7,7 +7,7 @@ import { html, render, useState, useEffect, useRef } from 'https://cdn.jsdelivr.
 import { auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, Bytes } from './firebase.js';
 import * as M from './motore.js';
 
-const VERSIONE = '2.1 · 15/11/2026';
+const VERSIONE = '2.2 · 15/11/2026';
 const numIt = v => { const n = Number(String(v ?? '').trim().replace(/\s/g, '').replace(',', '.')); return isFinite(n) && String(v ?? '').trim() !== '' ? n : null; };
 
 // ---------- foto del pasto: rimpicciolite sul telefono (800 px) e tenute nel diario ----------
@@ -103,11 +103,11 @@ function Digiuno({ stato, aggiorna }) {
     const apre = new Date(stato.inizio + M.ORE_DIGIUNO * 3600000);
     return html`<section class="card"><div class="riga"><h3>🌙 Digiuno</h3><span class="pill ${ore >= M.ORE_DIGIUNO ? 'verde' : ''}">${Math.floor(ore)} h ${String(Math.floor((ore % 1) * 60)).padStart(2, '0')} min</span></div>
       <div class="barra"><div style=${`width:${pct}%`}></div></div>
-      <p class="piccolo">Iniziato alle ${M.oraRoma(new Date(stato.inizio))} · 16 ore alle <b>${M.oraRoma(apre)}</b></p>
+      <p class="piccolo">Iniziato alle ${M.oraRoma(new Date(stato.inizio))} · 16 ore alle <b>${M.oraRoma(apre)}</b>. Si chiude da solo al primo pasto che registri.</p>
       <div class="azioni">${orario}<button class="primario" onClick=${apri}>${chiediOra ? 'Aperta a quest\'ora' : 'Apro la finestra ora'}</button>${linkOra}</div></section>`;
   }
   return html`<section class="card"><div class="riga"><h3>🍽 Finestra aperta</h3>${stato?.apertaAlle ? html`<span class="pill">dalle ${M.oraRoma(new Date(stato.apertaAlle))}</span>` : null}</div>
-    <p class="piccolo">Quando hai finito di mangiare, fai partire le 16 ore.</p>
+    <p class="piccolo">Riparte da solo quando chiudi la giornata, dall'ora dell'ultimo pasto.</p>
     <div class="azioni">${orario}<button class="primario" onClick=${inizia}>${chiediOra ? 'Iniziato a quest\'ora' : 'Inizia il digiuno ora'}</button>${linkOra}</div></section>`;
 }
 
@@ -163,8 +163,26 @@ function leggiGemini(t) {
 
 // ---------- salvataggi comuni ----------
 const tondo = x => x != null && isFinite(x) ? Math.round(x) : null;
+/** Digiuno automatico (15/11): il primo pasto registrato chiude il digiuno e apre la finestra. */
+async function chiudiDigiunoSeServe(data) {
+  if (data !== M.oggiRoma()) return;
+  const s = await M.statoDigiuno(); if (!s?.inizio) return;
+  const fine = Date.now(); const ore = M.r1((fine - s.inizio) / 3600000);
+  await addDoc(collection(db, 'digiuni'), { inizio: s.inizio, fine, ore, data: M.oggiRoma(new Date(s.inizio)), completato: ore >= M.ORE_DIGIUNO, chiusoDa: 'primo pasto' });
+  await setDoc(doc(db, 'stato', 'digiuno'), { inizio: null, apertaAlle: fine });
+}
+/** E quando si chiude la giornata riparte, dall'ora dell'ultimo pasto di oggi. */
+async function avviaDigiunoDaUltimoPasto(pasti) {
+  const s = await M.statoDigiuno(); if (s?.inizio) return null;
+  const ult = [...(pasti || [])].map(p => p.ora).filter(Boolean).sort().pop();
+  let t = Date.now();
+  if (ult) { const [h, m] = ult.split(':').map(Number); const d = new Date(); d.setHours(h, m, 0, 0); if (d.getTime() <= Date.now()) t = d.getTime(); }
+  await setDoc(doc(db, 'stato', 'digiuno'), { inizio: t, apertaAlle: null, avviatoDa: 'chiusura giornata' });
+  return t;
+}
 /** Salva un pasto fatto di una o più voci. Ritorna l'id (la ricevuta). */
 async function salvaPasto(data, voci, extra = {}) {
+  await chiudiDigiunoSeServe(data);
   const somma = k => { const v = voci.map(x => x[k]).filter(x => x != null); return v.length ? Math.round(v.reduce((a, b) => a + b, 0)) : null; };
   const fonti = [...new Set(voci.map(x => x.fonte).filter(Boolean))];
   const ref = await addDoc(collection(db, 'pasti'), { data, ora: M.oraRoma(), descrizione: voci.map(x => x.descrizione).join(' + ').slice(0, 300),
@@ -351,6 +369,7 @@ function PastoSheet({ pasto, data, onClose, aggiorna, iniziale, fotoIniziale }) 
       if (modo === 'modifica') await updateDoc(doc(db, 'pasti', pasto.id), campi);
       else {
         const foto = fotoIniziale ? [await salvaFoto(await ridimensiona(fotoIniziale, 800, 0.72))] : [];
+        await chiudiDigiunoSeServe(data);
         await addDoc(collection(db, 'pasti'), { data, ...campi, foto, ts: Date.now(), origine: 'fasttrack' });
         if (salvaMiei) await ricordaCibo({ nome: campi.descrizione, kcalPezzo: campi.kcal, protPezzo: campi.proteine, carboPezzo: campi.carboidrati, grassiPezzo: campi.grassi, pezzo: 'porzione', fonte: 'a mano' });
       }
@@ -414,11 +433,12 @@ function AttivitaSheet({ data, g, onClose, aggiorna }) {
 }
 
 function ChiudiSheet({ data, n, onClose, aggiorna }) {
-  const chiudi = async esito => { await aggiornaGiorno(data, { chiusa: true, esito }); aggiorna(); onClose(); };
+  const chiudi = async esito => { await aggiornaGiorno(data, { chiusa: true, esito }); if (data === M.oggiRoma()) await avviaDigiunoDaUltimoPasto(n.pasti); aggiorna(); onClose(); };
+  const ult = [...(n.pasti || [])].map(p => p.ora).filter(Boolean).sort().pop();
   return html`<${Sheet} titolo="Chiudi la giornata" onClose=${onClose}>
     <p>Mangiate <b>${M.kcalTxt(n.mangiato)}</b> kcal su ${M.kcalTxt(n.obiettivo)} · deficit di oggi <b>${M.kcalTxt(n.deficitOggi)}</b> kcal.</p>
     ${n.mangiato < n.basale.valore - 300 ? html`<p class="avviso">Sei molto sotto il basale: non è un successo, si perde muscolo. Se è un errore di registrazione, correggi prima di chiudere.</p>` : null}
-    <p class="piccolo">Solo le giornate chiuse contano per il bilancio del sabato.</p>
+    <p class="piccolo">Il digiuno parte da solo ${ult ? `dalle ${ult}, l'ora dell'ultimo pasto` : 'da adesso'}. Solo le giornate chiuse contano per il bilancio del sabato.</p>
     <div class="azioni"><button class="primario" onClick=${() => chiudi(n.residuo >= 0 ? 'rispettata' : 'sopra')}>Chiudi${n.residuo < 0 ? ' (sopra il budget)' : ''}</button><button class="secondario" onClick=${() => chiudi('sgarro')}>Chiudi come sgarro</button></div>
     ${n.giorno?.chiusa ? html`<button class="link" onClick=${async () => { await aggiornaGiorno(data, { chiusa: false }); aggiorna(); onClose(); }}>Riapri la giornata</button>` : null}
   <//>`;

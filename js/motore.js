@@ -126,7 +126,7 @@ export function consigli(n, digiuno, adesso = new Date()) {
     const apre = new Date(digiuno.inizio + ORE_DIGIUNO * 3600000);
     out.push({ tipo: 'digiuno', testo: `Sei a digiuno da ${Math.floor(oreDigiuno)} h: la finestra si apre alle ${oraRoma(apre)} (tra ${Math.floor(manca)} h ${Math.round((manca % 1) * 60)} min). Acqua, tè o caffè amaro vanno bene.` });
   } else if (inDigiuno) {
-    out.push({ tipo: 'digiuno', testo: `16 ore fatte. Quando mangi, tocca «Apri la finestra»: hai ${kcalTxt(n.obiettivo)} kcal per oggi.` });
+    out.push({ tipo: 'digiuno', testo: `16 ore fatte. Quando mangi, registra il pasto: la finestra si apre da sola. Hai ${kcalTxt(n.obiettivo)} kcal per oggi.` });
   }
 
   if (n.residuo < 0) {
