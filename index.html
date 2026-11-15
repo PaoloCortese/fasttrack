@@ -176,6 +176,17 @@
     .pallino.e-oggi .segno { border: 3px solid var(--accento); }
     .pallino.e-oggi small { color: var(--accento); font-weight: 700; }
     .pallini.grandi { margin: 12px 0 4px; } .pallini.grandi .segno { width: 34px; height: 34px; font-size: 16px; }
+    .testa { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .tasto-greg { min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--accento); background: var(--carta); color: var(--accento); font-weight: 700; cursor: pointer; white-space: nowrap; }
+    .sheet.chat { height: 92vh; display: flex; flex-direction: column; padding-bottom: 0; }
+    .sheet.chat h2 small { font-weight: 500; color: var(--testo-2); font-size: 14px; }
+    .chat-corpo { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 12px 0; }
+    .bolla { max-width: 88%; padding: 10px 13px; border-radius: 16px; font-size: 15.5px; line-height: 1.45; }
+    .bolla p { margin: 0 0 6px; } .bolla p:last-child { margin: 0; } .bolla ul { margin: 4px 0 6px; padding-left: 20px; }
+    .bolla.mia { align-self: flex-end; background: var(--accento); color: var(--carta); border-bottom-right-radius: 4px; }
+    .bolla.sua { align-self: flex-start; background: var(--accento-chiaro); color: var(--testo); border-bottom-left-radius: 4px; }
+    .chat-scrivi { display: flex; gap: 8px; align-items: flex-end; padding: 10px 0 calc(env(safe-area-inset-bottom) + 12px); border-top: 1px solid var(--linea); background: var(--carta); }
+    .chat-scrivi textarea { flex: 1; resize: none; min-height: 48px; }
     .grafico { width: 100%; height: auto; display: block; }
     .grafico .asse { font-size: 10px; fill: var(--testo-2); }
     .grafico .griglia-l { stroke: var(--linea); }

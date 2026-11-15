@@ -7,7 +7,7 @@ import { html, render, useState, useEffect, useRef } from 'https://cdn.jsdelivr.
 import { auth, db, onAuthStateChanged, signInWithEmailAndPassword, signOut, collection, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc, query, where, Bytes } from './firebase.js';
 import * as M from './motore.js';
 
-const VERSIONE = '2.3 · 15/11/2026';
+const VERSIONE = '2.4 · 15/11/2026';
 const numIt = v => { const n = Number(String(v ?? '').trim().replace(/\s/g, '').replace(',', '.')); return isFinite(n) && String(v ?? '').trim() !== '' ? n : null; };
 
 // ---------- foto del pasto: rimpicciolite sul telefono (800 px) e tenute nel diario ----------
@@ -667,6 +667,52 @@ function Altro({ tick, aggiorna }) {
     <p class="versione">Fast Track ${VERSIONE}</p>`;
 }
 
+// ---------- 💬 GREG: il tutor, dentro Fast Track (stessa chat di AZienda; i dati clinici restano sul Mac) ----------
+const URL_CHAT_GREG = URL_GREG.replace('/foto', '/greg');
+function mdLite(t) {
+  const e = String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const righe = e.split('\n'); let out = '', lista = false;
+  for (const r of righe) {
+    const x = r.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|\s)\*(\S[^*]*?)\*(?=\s|$)/g, '$1<i>$2</i>');
+    if (/^\s*[-•]\s+/.test(r)) { if (!lista) { out += '<ul>'; lista = true; } out += '<li>' + x.replace(/^\s*[-•]\s+/, '') + '</li>'; }
+    else { if (lista) { out += '</ul>'; lista = false; } if (/^#{1,4}\s/.test(r)) out += '<p><b>' + x.replace(/^#+\s/, '') + '</b></p>'; else if (r.trim()) out += '<p>' + x + '</p>'; }
+  }
+  return out + (lista ? '</ul>' : '');
+}
+function GregChat({ onClose }) {
+  const [msgs, setMsgs] = useState(null); const [t, setT] = useState(''); const [att, setAtt] = useState(false); const [err, setErr] = useState('');
+  const fondo = useRef();
+  const scorri = () => setTimeout(() => fondo.current?.scrollIntoView({ block: 'end' }), 30);
+  useEffect(() => { (async () => { try { const tok = await auth.currentUser.getIdToken(); const r = await fetch(URL_CHAT_GREG, { headers: { authorization: 'Bearer ' + tok } }); const j = await r.json(); if (j.error) throw new Error(j.error); setMsgs(j.messaggi || []); scorri(); } catch (e) { setErr('Chat non raggiungibile: ' + (e?.message || e)); setMsgs([]); } })(); }, []);
+  const invia = async e => {
+    e?.preventDefault(); const m = t.trim(); if (!m || att) return;
+    setT(''); setErr(''); setAtt(true); setMsgs(v => [...(v || []), { ruolo: 'paolo', testo: m, ts: Date.now() }]); scorri();
+    try {
+      const tok = await auth.currentUser.getIdToken();
+      const r = await fetch(URL_CHAT_GREG, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tok }, body: JSON.stringify({ message: m }) });
+      const j = await r.json().catch(() => ({ error: 'risposta non leggibile' }));
+      if (!r.ok || j.error) throw new Error(j.error || 'errore ' + r.status);
+      setMsgs(v => [...v, { ruolo: 'greg', testo: j.reply, ts: Date.now(), ricevute: j.ricevute }]);
+    } catch (x) { setErr('Greg non ha risposto: ' + (x?.message || x)); }
+    setAtt(false); scorri();
+  };
+  return html`<div class="velo" onClick=${e => e.target === e.currentTarget && onClose()}>
+    <div class="sheet chat" role="dialog" aria-modal="true" aria-label="Chat con Greg">
+      <div class="sheet-testa"><h2>💬 Greg <small>il tuo tutor</small></h2><button class="x" aria-label="Chiudi" onClick=${onClose}>×</button></div>
+      <div class="chat-corpo">
+        ${msgs === null ? html`<p class="caricamento">Carico la chat…</p>` : !msgs.length ? html`<p class="piccolo">Chiedimi come va la settimana, cosa mangiare al prossimo pasto, come rientrare dopo uno sgarro, o raccontami come stai. Leggo i tuoi numeri di Fast Track; referti e terapie li vedo sul Mac.</p>` : null}
+        ${(msgs || []).map(m => html`<div class=${'bolla ' + (m.ruolo === 'paolo' ? 'mia' : 'sua')}>${m.ruolo === 'paolo' ? html`<p>${m.testo}</p>` : html`<div dangerouslySetInnerHTML=${{ __html: mdLite(m.testo) }}></div>`}${m.foto ? html`<small>📷 ×${m.foto}</small>` : null}</div>`)}
+        ${att ? html`<div class="bolla sua"><p class="piccolo" role="status">Greg sta scrivendo…</p></div>` : null}
+        <${Errore} e=${err} />
+        <div ref=${fondo}></div>
+      </div>
+      <form class="chat-scrivi" onSubmit=${invia}>
+        <textarea rows="2" value=${t} onInput=${e => setT(e.target.value)} onKeyDown=${e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && matchMedia('(pointer:fine)').matches) invia(e); }} placeholder="Scrivi a Greg (o detta col microfono della tastiera)" aria-label="Messaggio a Greg"></textarea>
+        <button class="primario" disabled=${att || !t.trim()}>Invia</button>
+      </form>
+    </div></div>`;
+}
+
 // ---------- l'app ----------
 const SCHEDE = [['oggi', 'Oggi', '◎'], ['diario', 'Diario', '☰'], ['peso', 'Peso', '⚖'], ['altro', 'Altro', '⋯']];
 function App() {
@@ -674,6 +720,7 @@ function App() {
   const [scheda, setScheda] = useState(() => { try { return localStorage.getItem('ft2_scheda') || 'oggi'; } catch { return 'oggi'; } });
   const [tick, setTick] = useState(0);
   const [greg, setGreg] = useState(null);
+  const [chat, setChat] = useState(false);
   const aggiorna = () => setTick(t => t + 1);
   useEffect(() => onAuthStateChanged(auth, u => setUtente(u || null)), []);
   useEffect(() => { try { localStorage.setItem('ft2_scheda', scheda); } catch {} }, [scheda]);
@@ -682,7 +729,8 @@ function App() {
   if (!utente) return html`<${Login} />`;
   const Vista = { oggi: Oggi, diario: Diario, peso: Peso, altro: Altro }[scheda];
   const titolo = { oggi: new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Rome' }), diario: 'Diario', peso: 'Peso', altro: 'Altro' }[scheda];
-  return html`<header class="testa"><h1>${titolo}</h1></header>
+  return html`<header class="testa"><h1>${titolo}</h1><button class="tasto-greg" onClick=${() => setChat(true)} aria-label="Parla con Greg">💬 Greg</button></header>
+    ${chat ? html`<${GregChat} onClose=${() => { setChat(false); aggiorna(); }} />` : null}
     <main class="contenuto"><${Vista} tick=${tick} aggiorna=${aggiorna} greg=${greg} setGreg=${setGreg} /></main>
     <nav class="schede" aria-label="Sezioni">${SCHEDE.map(([k, t, i]) => html`<button class=${scheda === k ? 'attiva' : ''} aria-current=${scheda === k ? 'page' : null} onClick=${() => setScheda(k)}><span aria-hidden="true">${i}</span>${t}</button>`)}</nav>`;
 }
