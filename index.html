@@ -111,6 +111,18 @@
     .mini button { position: absolute; top: -8px; right: -8px; width: 30px; height: 30px; border-radius: 50%; border: 0; background: var(--testo); color: var(--carta); font-size: 17px; cursor: pointer; }
     .foto-add { width: 84px; height: 84px; border-radius: 12px; border: 2px dashed var(--accento); background: var(--accento-chiaro); color: var(--accento); font-size: 26px; display: grid; place-items: center; align-content: center; gap: 0; cursor: pointer; }
     .foto-add span { font-size: 13px; font-weight: 600; }
+    .segmenti { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--accento-chiaro); padding: 4px; border-radius: 12px; margin: 12px 0; }
+    .segmenti button { border: 0; background: none; border-radius: 9px; min-height: 42px; font-size: 13.5px; font-weight: 600; color: var(--testo-2); cursor: pointer; padding: 0 2px; }
+    .segmenti button.attivo { background: var(--carta); color: var(--accento); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .voci { list-style: none; margin: 8px 0 0; padding: 0; max-height: 45vh; overflow: auto; }
+    .voci li { display: flex; align-items: stretch; border-bottom: 1px solid var(--linea); }
+    .voci li > button:first-child { flex: 1; display: flex; justify-content: space-between; gap: 10px; align-items: center; background: none; border: 0; text-align: left; padding: 12px 2px; min-height: 48px; cursor: pointer; }
+    .voci small { color: var(--testo-2); white-space: nowrap; }
+    .x-piccola { background: none; border: 0; color: var(--testo-2); font-size: 20px; width: 44px; cursor: pointer; }
+    .quantita { margin-top: 8px; } .quantita p { margin: 0; }
+    .unita { align-self: center; color: var(--testo-2); }
+    .grande-medio { font-size: 26px; font-weight: 700; margin: 10px 0 0 !important; font-variant-numeric: tabular-nums; }
+    .passi { margin: 4px 0 10px; padding-left: 20px; display: grid; gap: 8px; font-size: 15px; }
     .grafico { width: 100%; height: auto; display: block; }
     .grafico .asse { font-size: 10px; fill: var(--testo-2); }
     .grafico .griglia-l { stroke: var(--linea); }

@@ -136,7 +136,8 @@ export function consigli(n, digiuno, adesso = new Date()) {
   } else if (!inDigiuno && n.residuo > 350) {
     const pasti = n.pasti.length;
     if (pasti === 0) out.push({ tipo: 'info', testo: `Finestra aperta, ${kcalTxt(n.obiettivo)} kcal a disposizione. Parti dalle proteine (pollo, pesce, uova, legumi) con verdura a volontà: tengono sazio più a lungo.` });
-    else out.push({ tipo: 'info', testo: `Restano ${kcalTxt(n.residuo)} kcal. Per la cena: proteina magra (150 g di carne o 250 g di pesce), verdura a volontà e, se ci sta, 80 g di pasta o riso integrale (≈ 280 kcal).` });
+    else if (n.residuo < 700) out.push({ tipo: 'info', testo: `Restano ${kcalTxt(n.residuo)} kcal: per la cena proteina magra (150 g di pollo o tacchino ≈ 170 kcal, oppure 250 g di pesce bianco ≈ 200) con verdura a volontà e poco olio. Oggi niente pasta.` });
+    else out.push({ tipo: 'info', testo: `Restano ${kcalTxt(n.residuo)} kcal: per la cena proteina magra (150 g di carne o 250 g di pesce), verdura a volontà e 80 g di pasta o riso integrale (≈ 280 kcal).` });
   }
 
   if (ora >= 21 && n.mangiato > 0 && n.mangiato < n.basale.valore - 300 && n.residuo > 0) {
