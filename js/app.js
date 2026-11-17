@@ -201,8 +201,15 @@ async function chiudiDigiunoSeServe(data) {
   if (data !== M.oggiRoma()) return;
   const s = await M.statoDigiuno(); if (!s?.inizio) return;
   const fine = Date.now(); const ore = M.r1((fine - s.inizio) / 3600000);
-  await addDoc(collection(db, 'digiuni'), { inizio: s.inizio, fine, ore, data: M.oggiRoma(new Date(s.inizio)), completato: ore >= M.ORE_DIGIUNO, chiusoDa: 'primo pasto' });
-  await setDoc(doc(db, 'stato', 'digiuno'), { inizio: null, apertaAlle: fine });
+  const r = await addDoc(collection(db, 'digiuni'), { inizio: s.inizio, fine, ore, data: M.oggiRoma(new Date(s.inizio)), completato: ore >= M.ORE_DIGIUNO, chiusoDa: 'primo pasto' });
+  await setDoc(doc(db, 'stato', 'digiuno'), { inizio: null, apertaAlle: fine, riapribile: { inizio: s.inizio, id: r.id } });
+}
+/** 17/11: se si elimina il pasto che aveva chiuso il digiuno e oggi non resta nulla, il digiuno riparte dal suo vero inizio. */
+async function riapriDigiunoSeServe(data) {
+  if (data !== M.oggiRoma() || (await M.pastiDel(data)).length) return;
+  const s = await M.statoDigiuno(); if (s?.inizio || !s?.riapribile?.inizio) return;
+  if (s.riapribile.id) await deleteDoc(doc(db, 'digiuni', s.riapribile.id)).catch(() => {});
+  await setDoc(doc(db, 'stato', 'digiuno'), { inizio: s.riapribile.inizio, apertaAlle: null, avviatoDa: 'ripreso (pasto eliminato)' });
 }
 /** La mattina, se il digiuno non è partito e oggi non hai ancora mangiato, parte da solo dall'ultimo pasto di ieri. */
 async function digiunoDelMattino(stato, pastiOggi) {
@@ -461,7 +468,7 @@ function PastoSheet({ pasto, data, onClose, aggiorna, iniziale, fotoIniziale }) 
       aggiorna(); onClose();
     } catch (x) { setErr('Non salvato: ' + (x?.message || x)); setLavoro(false); }
   };
-  const elimina = async () => { if (!confirm('Eliminare questo pasto?')) return; await deleteDoc(doc(db, 'pasti', pasto.id)); for (const id of pasto.foto || []) await deleteDoc(doc(db, 'foto', id)).catch(() => {}); aggiorna(); onClose(); };
+  const elimina = async () => { if (!confirm('Eliminare questo pasto?')) return; await deleteDoc(doc(db, 'pasti', pasto.id)); for (const id of pasto.foto || []) await deleteDoc(doc(db, 'foto', id)).catch(() => {}); await riapriDigiunoSeServe(pasto.data); aggiorna(); onClose(); };
   const apriGemini = () => { try { navigator.clipboard.writeText(DOMANDA_GEMINI); } catch {} window.open('https://gemini.google.com/app', '_blank'); };
   const leggiG = () => { const r = leggiGemini(gT); if (!r) { setErr('Non trovo le kcal: incolla la riga che inizia con FASTTRACK.'); return; } setErr(''); setF(x => ({ ...x, descrizione: r.descrizione, kcal: String(r.kcal), proteine: r.proteine != null ? String(r.proteine) : '', carboidrati: r.carboidrati != null ? String(r.carboidrati) : '', grassi: r.grassi != null ? String(r.grassi) : '', fonte: 'gemini_app' })); setModo('mano'); };
   const voceRiga = (x, extra) => html`<li><button onClick=${() => setScelta(x)}>${x.mini ? html`<img class="mini-riga" src=${miniUrl(x.mini)} alt="" />` : null}<span>${x.nome}</span><small>${x.kcalPezzo != null ? `${M.kcalTxt(x.kcalPezzo)} kcal/${x.pezzo || 'pz'}` : `${M.kcalTxt(x.kcal100)} kcal/100 g`}</small></button>${extra || null}</li>`;
@@ -539,7 +546,8 @@ function Oggi({ tick, aggiorna, greg, setGreg }) {
   if (ieri && ieri.stato === 'vuoto' && ieri.kcal > 0) consigli.unshift({ tipo: 'allarme', testo: `Ieri risultano ${M.kcalTxt(ieri.kcal)} kcal: è tutto? Se manca un pasto aggiungilo da Diario (su ieri, non dai tuoi piatti qui sopra, che vanno su oggi).`,
     azione: { etichetta: '✓ Sì, era tutto', fai: async () => { await aggiornaGiorno(ieri.data, { completa: true }); aggiorna(); } } });
   const g = n.giorno || {};
-  const acqua = async () => { await aggiornaGiorno(data, { acquaL: M.r1((g.acquaL || 0) + 0.25) }); aggiorna(); };
+  // 17/11: tre tasti; si somma ai centesimi (al decimo 0,25 diventava 0,3 e due bicchieri facevano 0,6)
+  const acqua = async l => { await aggiornaGiorno(data, { acquaL: Math.round(((g.acquaL || 0) + l) * 100) / 100 }); aggiorna(); };
   const salvaVoceRapida = async v => { setSheet({ tipo: 'salvo' }); await setDoc(doc(db, 'preferiti', v._voce.id), { usi: (v._voce.usi || 0) + 1 }, { merge: true }); const { _voce, ...r } = v; await salvaPasto(data, [r]); setSheet(null); aggiorna(); };
   return html`
     <${Budget} n=${n} s=${s} onSfida=${() => setSheet({ tipo: 'sfida' })} />
@@ -554,7 +562,7 @@ function Oggi({ tick, aggiorna, greg, setGreg }) {
     <${Digiuno} stato=${dig} aggiorna=${aggiorna} />
     <section class="card"><div class="riga"><h3>Attività</h3><button class="link" onClick=${() => setSheet({ tipo: 'attivita' })}>Modifica</button></div>
       <div class="tre"><div><b>${g.passi != null ? M.kcalTxt(g.passi) : '—'}</b><span>passi</span></div><div><b>${g.kcalAttive != null ? M.kcalTxt(g.kcalAttive) : '—'}</b><span>kcal attive</span></div><div><b>${g.acquaL != null ? String(g.acquaL).replace('.', ',') : '0'} L</b><span>acqua</span></div></div>
-      <div class="azioni"><button class="secondario" onClick=${acqua}>💧 + 0,25 L</button></div>
+      <div class="azioni acqua">${[[0.25, '🥛', '+0,25', 'bicchiere'], [0.5, '💧', '+0,5', 'bottiglietta'], [1, '🍶', '+1 L', 'bottiglia']].map(([l, i, t, d]) => html`<button class="secondario" onClick=${() => acqua(l)}>${i} ${t}<small>${d}</small></button>`)}</div>
     </section>
     ${greg && greg.aperto ? html`<${GregSheet} greg=${greg} setGreg=${setGreg} n=${n} aggiorna=${aggiorna} onCorreggi=${(v, foto) => setSheet({ tipo: 'pasto', iniziale: v || { descrizione: '', kcal: '', fonte: 'a_mano' }, foto })} />` : null}
     ${sheet?.tipo === 'voce' ? html`<${Sheet} titolo="Il tuo piatto" onClose=${() => setSheet(null)}><${Quantita} voce=${sheet.voce} onSalva=${salvaVoceRapida} onAnnulla=${() => setSheet(null)} /><//>` : null}
