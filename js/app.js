@@ -654,11 +654,38 @@ function Oggi({ tick, aggiorna, greg, setGreg }) {
 }
 
 // ---------- DIARIO ----------
-function GiornoSheet({ data, onClose, aggiorna }) {
+// 17/11: delta del giorno = mangiato − fabbisogno (negativo = deficit, è quello che fa calare). L'attività non si somma: è già nel fabbisogno.
+const segno = d => (d > 0 ? '+' : d < 0 ? '−' : '') + M.kcalTxt(Math.abs(d));
+const oreTxt = o => o >= 1 ? `${Math.floor(o)} h${Math.round((o % 1) * 60) ? ' ' + String(Math.round((o % 1) * 60)).padStart(2, '0') : ''}` : `${Math.round(o * 60)} min`;
+function vociGiorno(r, conProteine) {
+  return [
+    r.pasti ? `${r.pasti} ${r.pasti === 1 ? 'pasto' : 'pasti'}` : '',
+    conProteine && r.proteine ? `proteine ${r.proteine} g` : '',
+    r.acquaL ? `acqua ${String(r.acquaL).replace('.', ',')} L` : '',
+    r.passi != null ? `${M.kcalTxt(r.passi)} passi` : '',
+    r.kcalAttive ? `${M.kcalTxt(r.kcalAttive)} kcal attive` : '',
+    r.digiunoOre ? `digiuno ${oreTxt(r.digiunoOre)}` : '',
+    r.pesata ? `${M.kgTxt(r.pesata)} kg` : '',
+    r.soloStorico ? 'stima Gemini' : '',
+  ].filter(Boolean);
+}
+function GiornoSheet({ data, onClose, aggiorna, r, n }) {
   const [pasti, setPasti] = useState(null); const [mod, setMod] = useState(null);
   const carica = () => M.pastiDel(data).then(setPasti);
   useEffect(() => { carica(); }, []);
+  const riepilogo = r && n && r.kcal ? (() => {
+    const fab = n.fabbisogno.valore, dF = r.kcal - fab, dB = r.kcal - n.obiettivo;
+    const conta = M.giornoConta(r, M.oggiRoma(), n.basale.valore);
+    return html`<div class="riepilogo-giorno">
+      <div class="tre"><div><b>${M.kcalTxt(r.kcal)}</b><span>mangiate</span></div>
+        <div><b class=${conta ? (dF <= 0 ? 'verde' : 'rosso') : ''}>${segno(dF)}</b><span>sul fabbisogno ${M.kcalTxt(fab)}</span></div>
+        <div><b class=${conta ? (dB <= 0 ? 'verde' : 'rosso') : ''}>${segno(dB)}</b><span>sul budget ${M.kcalTxt(n.obiettivo)}</span></div></div>
+      ${!conta ? html`<p class="piccolo centro">${r.data >= M.oggiRoma() ? 'Giornata in corso.' : 'Giornata incompleta: non entra nei conti finché non confermi «era tutto».'}</p>` : dF < 0 ? html`<p class="piccolo centro">Deficit di ${M.kcalTxt(-dF)} kcal ≈ ${M.kcalTxt(-dF / 7.7)} g di grasso.</p>` : null}
+      <p class="numeri">${vociGiorno(r, true).slice(1).map(t => html`<span>${t}</span>`)}</p>
+    </div>`;
+  })() : null;
   return html`<${Sheet} titolo=${M.dataBreve(data)} onClose=${onClose}>
+    ${riepilogo}
     ${!pasti ? html`<p class="caricamento">Carico…</p>` : pasti.length ? html`<ul class="pasti">${pasti.map(p => html`<li><button onClick=${() => setMod(p)}><span class="ora">${p.ora || ''}</span><span class="desc">${p.descrizione}</span><b>${M.kcalTxt(p.kcal)}</b></button></li>`)}</ul>` : html`<p class="piccolo">Nessun pasto.</p>`}
     <button class="secondario largo" onClick=${() => setMod('nuovo')}>+ Aggiungi un pasto a questo giorno</button>
     ${mod ? html`<${PastoSheet} pasto=${mod === 'nuovo' ? null : mod} data=${data} onClose=${() => setMod(null)} aggiorna=${() => { carica(); aggiorna(); }} />` : null}
@@ -669,24 +696,32 @@ function Diario({ tick, aggiorna }) {
   const [righe, setRighe] = useState(null); const [n, setN] = useState(null); const [aperto, setAperto] = useState(null);
   useEffect(() => { Promise.all([M.diario(M.oggiRoma(), 14), M.numeri()]).then(([d, x]) => { setRighe(d.reverse()); setN(x); }); }, [tick]);
   if (!righe) return html`<p class="caricamento">Carico…</p>`;
-  const conta = r => M.giornoConta(r, M.oggiRoma(), n.basale.valore);
+  const oggi = M.oggiRoma();
+  const conta = r => M.giornoConta(r, oggi, n.basale.valore);
+  const fab = n.fabbisogno.valore;
   const chiusi7 = righe.slice(0, 8).filter(conta).slice(0, 7);
   const media = chiusi7.length ? chiusi7.reduce((s, r) => s + r.kcal, 0) / chiusi7.length : null;
-  let serie = 0; for (const r of righe) { if (r.data >= M.oggiRoma()) continue; if (conta(r) && r.kcal <= n.obiettivo) serie++; else break; }
+  const deficit7 = chiusi7.reduce((s, r) => s + (fab - r.kcal), 0);
+  let serie = 0; for (const r of righe) { if (r.data >= oggi) continue; if (conta(r) && r.kcal <= n.obiettivo) serie++; else break; }
+  const rAperto = aperto ? righe.find(r => r.data === aperto) : null;
   return html`
     <section class="card"><div class="tre">
       <div><b>${media != null ? M.kcalTxt(media) : '—'}</b><span>media kcal (ultimi giorni registrati)</span></div>
       <div><b>${chiusi7.length}/7</b><span>giornate registrate</span></div>
-      <div><b>${serie}</b><span>di fila nel budget</span></div></div></section>
+      <div><b>${serie}</b><span>di fila nel budget</span></div></div>
+      ${chiusi7.length ? html`<p class="numeri">${deficit7 >= 0 ? 'Deficit' : 'Surplus'} dei giorni registrati <b class=${deficit7 >= 0 ? 'verde' : 'rosso'}>${M.kcalTxt(Math.abs(deficit7))} kcal</b>${deficit7 > 0 ? ` ≈ ${M.kgTxt(deficit7 / 7700)} kg` : ''}</p>` : null}
+      <p class="piccolo centro">A destra: kcal sotto (−) o sopra (+) il fabbisogno di ${M.kcalTxt(fab)}. Tocca un giorno per i pasti.</p></section>
     <ul class="diario">${righe.map(r => {
       const pct = Math.min(100, r.kcal / n.obiettivo * 100); const sopra = r.kcal > n.obiettivo;
+      const c = conta(r); const d = r.kcal - fab;
       return html`<li><button onClick=${() => setAperto(r.data)}>
         <span class="giorno">${M.dataBreve(r.data)}</span>
         <span class="mini-barra ${sopra ? 'rossa' : ''}"><span style=${`width:${pct}%`}></span></span>
         <span class="kcal">${r.kcal ? M.kcalTxt(r.kcal) : '—'}</span>
-        <span class="extra">${[r.passi != null ? `${M.kcalTxt(r.passi)} passi` : '', r.pesata ? `${M.kgTxt(r.pesata)} kg` : '', r.soloStorico ? 'stima Gemini' : ''].filter(Boolean).join(' · ')}</span></button></li>`;
+        <span class=${'delta ' + (!r.kcal ? '' : !c ? 'grigio' : d <= 0 ? 'verde' : 'rosso')}>${r.kcal ? segno(d) : ''}</span>
+        <span class="extra">${vociGiorno(r, false).join(' · ')}</span></button></li>`;
     })}</ul>
-    ${aperto ? html`<${GiornoSheet} data=${aperto} onClose=${() => setAperto(null)} aggiorna=${aggiorna} />` : null}`;
+    ${aperto ? html`<${GiornoSheet} data=${aperto} r=${rAperto} n=${n} onClose=${() => setAperto(null)} aggiorna=${aggiorna} />` : null}`;
 }
 
 // ---------- PESO ----------

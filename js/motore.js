@@ -160,19 +160,24 @@ export function consigli(n, digiuno, adesso = new Date()) {
 // ---------- diario di più giorni ----------
 export async function diario(a, n) {
   const da = addGiorni(a, -(n - 1));
-  const [pS, gS, wS] = await Promise.all([
+  const [pS, gS, wS, dS] = await Promise.all([
     getDocs(query(collection(db, 'pasti'), where('data', '>=', da), where('data', '<=', a))),
     getDocs(query(collection(db, 'giorni'), where('data', '>=', da), where('data', '<=', a))),
     getDocs(query(collection(db, 'pesate'), where('data', '>=', da), where('data', '<=', a))),
+    getDocs(query(collection(db, 'digiuni'), where('data', '>=', addGiorni(da, -1)), where('data', '<=', a))),
   ]);
   const pasti = pS.docs.map(d => ({ id: d.id, ...d.data() }));
+  // 17/11: il digiuno va sul giorno in cui finisce (quello del primo pasto); le ore negative sono errori vecchi, fuori.
+  const digiuni = dS.docs.map(d => d.data()).filter(x => Number(x.ore) > 0).map(x => ({ ore: Number(x.ore), giorno: x.fine ? oggiRoma(new Date(x.fine)) : x.data }));
   const out = [];
   for (let i = 0; i < n; i++) {
     const d = addGiorni(da, i);
     const pp = pasti.filter(x => x.data === d);
     const g = gS.docs.find(x => x.id === d)?.data() || null;
     const w = wS.docs.find(x => x.data().data === d)?.data() || null;
-    out.push({ data: d, kcal: r0(pp.reduce((s, x) => s + (Number(x.kcal) || 0), 0)), pasti: pp.length, sgarri: pp.filter(x => x.aderenza === 'sgarro').length, soloStorico: pp.length > 0 && pp.every(x => x.fonte === 'gemini_storico'),
+    const dd = digiuni.filter(x => x.giorno === d);
+    out.push({ data: d, kcal: r0(pp.reduce((s, x) => s + (Number(x.kcal) || 0), 0)), proteine: r0(pp.reduce((s, x) => s + (Number(x.proteine) || 0), 0)), pasti: pp.length,
+      digiunoOre: dd.length ? Math.max(...dd.map(x => x.ore)) : null, km: g?.km ?? null, minuti: g?.minuti ?? null, sgarri: pp.filter(x => x.aderenza === 'sgarro').length, soloStorico: pp.length > 0 && pp.every(x => x.fonte === 'gemini_storico'),
       passi: g?.passi ?? null, kcalAttive: g?.kcalAttive ?? null, acquaL: g?.acquaL ?? null, chiusa: !!g?.chiusa, completa: !!g?.completa, esito: g?.esito || null, pesata: w?.kg ?? null });
   }
   return out;
