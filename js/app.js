@@ -81,6 +81,7 @@ const PERCORSI = {
   ok: '<path d="M20 6 9 17l-5-5"/>',
   attivita: '<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
   avanti: '<path d="m9 18 6-6-6-6"/>',
+  codice: '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M8 7v10"/><path d="M12 7v10"/><path d="M17 7v10"/>',
 };
 const Ico = ({ n, c = '' }) => html`<svg class=${'ico ' + c} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: PERCORSI[n] }}></svg>`;
 function useAdesso(ms = 30000) { const [a, setA] = useState(Date.now()); useEffect(() => { const t = setInterval(() => setA(Date.now()), ms); return () => clearInterval(t); }, []); return a; }
@@ -272,8 +273,27 @@ async function ricordaCibo(voce) {
   const s = await getDocs(collection(db, 'preferiti'));
   const nome = String(voce.nome || '').trim().toLowerCase();
   const gia = s.docs.find(d => { const x = d.data(); return (voce.codice && x.codice === voce.codice) || String(x.nome || '').trim().toLowerCase() === nome; });
-  if (gia) { await setDoc(gia.ref, { usi: (gia.data().usi || 0) + 1, ...(voce.mini && !gia.data().mini ? { mini: voce.mini } : {}) }, { merge: true }); return; }
-  await addDoc(collection(db, 'preferiti'), { kcal100: null, prot100: null, carbo100: null, grassi100: null, kcalPezzo: null, protPezzo: null, carboPezzo: null, grassiPezzo: null, pezzo: null, porzioneG: null, codice: null, fonte: '', ...voce, usi: 1, ts: Date.now() });
+  if (gia) { await setDoc(gia.ref, { usi: (gia.data().usi || 0) + 1, ultimo: Date.now(), ...(voce.mini && !gia.data().mini ? { mini: voce.mini } : {}) }, { merge: true }); return; }
+  await addDoc(collection(db, 'preferiti'), { kcal100: null, prot100: null, carbo100: null, grassi100: null, kcalPezzo: null, protPezzo: null, carboPezzo: null, grassiPezzo: null, pezzo: null, porzioneG: null, codice: null, fonte: '', ...voce, usi: 1, ts: Date.now(), ultimo: Date.now() });
+}
+// 17/11: sotto la fotina un nome da tavola. Se Greg non lo manda, lo accorcio dalla descrizione.
+const PAROLINE = /\s+(in|di|del|della|dei|delle|con|e|al|alla|allo|ai|alle|a|da|per|su)$/i;
+function nomeBreve(s) {
+  let t = String(s || '').split(/[,(;~]| con | circa /i)[0].replace(/\s+\d.*$/, '').trim();
+  if (t.length > 28) t = t.slice(0, 28).replace(/\s+\S*$/, '');
+  while (PAROLINE.test(t)) t = t.replace(PAROLINE, '');
+  return t || String(s || '').slice(0, 28);
+}
+const piuUsati = (a, b) => (b.usi || 0) - (a.usi || 0) || (b.ultimo || b.ts || 0) - (a.ultimo || a.ts || 0);
+// 17/11: codice a barre inquadrato. Lo legge il telefono (zxing, gratis), poi la ricerca va alle etichette.
+let zxing;
+async function leggiCodice(file) {
+  zxing ||= import('https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/es/reader/index.js');
+  const { readBarcodes } = await zxing;
+  const piccola = await rimpicciolisci(file, 1600, 0.92);
+  const blob = piccola ? await (await fetch(piccola)).blob() : file;
+  const r = await readBarcodes(blob, { tryHarder: true, tryRotate: true });
+  return r.map(x => x.text).find(t => /^\d{8,14}$/.test(t)) || null;
 }
 function ridimensiona(dataUrl, lato, qualita) {
   return new Promise(res => { const im = new Image(); im.onload = () => { const k = Math.min(1, lato / Math.max(im.naturalWidth, im.naturalHeight));
@@ -315,7 +335,7 @@ function GregSheet({ greg, setGreg, n, aggiorna, onCorreggi }) {
       const foto = await salvaFotoDiario();
       await salvaPasto(M.oggiRoma(), [{ descrizione: desc, kcal: k(p.kcal), proteine: k(p.proteine_g), carboidrati: k(p.carboidrati_g), grassi: k(p.grassi_g), fonte: 'greg_foto' }], { foto, affidabilita: p.affidabilita || null });
       const mini = await ridimensiona(greg.foto, 240, 0.7);
-      await ricordaCibo({ nome: p.descrizione, kcalPezzo: p.kcal, protPezzo: p.proteine_g ?? null, carboPezzo: p.carboidrati_g ?? null, grassiPezzo: p.grassi_g ?? null, pezzo: 'porzione', fonte: 'Greg (foto)', mini: mini ? Bytes.fromBase64String(mini.split(',')[1]) : null });
+      await ricordaCibo({ nome: p.nome || nomeBreve(p.descrizione), kcalPezzo: p.kcal, protPezzo: p.proteine_g ?? null, carboPezzo: p.carboidrati_g ?? null, grassiPezzo: p.grassi_g ?? null, pezzo: 'porzione', fonte: 'Greg (foto)', mini: mini ? Bytes.fromBase64String(mini.split(',')[1]) : null });
       setGreg(null); aggiorna();
     } catch (e) { setErr('Non salvato: ' + (e?.message || e)); setLavoro(false); }
   };
@@ -423,10 +443,12 @@ function TastiFoto({ setGreg }) {
     </div>`;
 }
 function Piatti({ onVoce, onCerca, tick }) {
-  const [frequenti, setFrequenti] = useState([]);
-  useEffect(() => { getDocs(collection(db, 'preferiti')).then(s => setFrequenti(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.mini).sort((a, b) => (b.usi || 0) - (a.usi || 0)).slice(0, 6))).catch(() => {}); }, [tick]);
+  const [piatti, setPiatti] = useState([]); const [tutti, setTutti] = useState(false);
+  useEffect(() => { getDocs(collection(db, 'preferiti')).then(s => setPiatti(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.mini).sort(piuUsati))).catch(() => {}); }, [tick]);
+  const frequenti = tutti ? piatti : piatti.slice(0, 6);
   return html`<section class="card">
     ${frequenti.length ? html`<h3>I tuoi piatti <small class="nota-titolo">gratis</small></h3><div class="fotine">${frequenti.map(x => html`<button onClick=${() => onVoce(x)}><img src=${miniUrl(x.mini)} alt="" /><span>${x.nome.length > 22 ? x.nome.slice(0, 21) + '…' : x.nome}</span><small>${M.kcalTxt(x.kcalPezzo ?? x.kcal100 ?? 0)}</small></button>`)}</div>` : null}
+    ${piatti.length > 6 ? html`<button class="link" onClick=${() => setTutti(!tutti)}>${tutti ? 'Mostra i primi 6' : `Vedi tutti (${piatti.length})`}</button>` : null}
     <button class="link con-ico" onClick=${onCerca}><${Ico} n="cerca" /> Cerca o scrivi</button>
   </section>`;
 }
@@ -485,12 +507,22 @@ function PastoSheet({ pasto, data, onClose, aggiorna, iniziale, fotoIniziale }) 
   const [lavoro, setLavoro] = useState(false); const [err, setErr] = useState('');
   const [archivio, setArchivio] = useState([]); const [gT, setGT] = useState('');
   useEffect(() => { if (pasto?.foto?.length) Promise.all(pasto.foto.map(fotoUrl)).then(v => setArchivio(v.filter(Boolean))); }, []);
-  useEffect(() => { if (nuovo) getDocs(collection(db, 'preferiti')).then(s => setMiei(s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.usi || 0) - (a.usi || 0) || a.nome.localeCompare(b.nome)))); }, []);
+  useEffect(() => { if (nuovo) getDocs(collection(db, 'preferiti')).then(s => setMiei(s.docs.map(d => ({ id: d.id, ...d.data() })).sort(piuUsati))); }, []);
   const set = (k, v) => setF(x => ({ ...x, [k]: v }));
   const filtro = q.trim().toLowerCase(); const mieiVisti = filtro ? miei.filter(x => x.nome.toLowerCase().includes(filtro)) : miei.slice(0, 8);
+  const inquadra = async e => {
+    const file = e.target.files && e.target.files[0]; e.target.value = ''; if (!file) return;
+    setCercando(true); setErr(''); setOff(null);
+    try {
+      const codice = await leggiCodice(file);
+      if (!codice) setErr('Non leggo il codice: rifai la foto più vicino, dritta e con luce.');
+      else { setQ(codice); setOff(await offCerca(codice)); }
+    } catch { setErr('Lettura non riuscita: controlla la connessione e riprova.'); }
+    setCercando(false);
+  };
   const cercaEtichette = async e => { e?.preventDefault(); if (q.trim().length < 2) return; setCercando(true); setErr('');
     try { setOff(await offCerca(q)); } catch { setErr('Ricerca non riuscita: controlla la connessione.'); } setCercando(false); };
-  const ricorda = async v => { const x = v._voce; if (!x) return; if (x.id) await setDoc(doc(db, 'preferiti', x.id), { usi: (x.usi || 0) + 1 }, { merge: true }); else await ricordaCibo({ nome: x.nome, kcal100: x.kcal100, prot100: x.prot100, carbo100: x.carbo100, grassi100: x.grassi100, porzioneG: x.porzioneG, codice: x.codice, fonte: x.fonte }); };
+  const ricorda = async v => { const x = v._voce; if (!x) return; if (x.id) await setDoc(doc(db, 'preferiti', x.id), { usi: (x.usi || 0) + 1, ultimo: Date.now() }, { merge: true }); else await ricordaCibo({ nome: x.nome, kcal100: x.kcal100, prot100: x.prot100, carbo100: x.carbo100, grassi100: x.grassi100, porzioneG: x.porzioneG, codice: x.codice, fonte: x.fonte }); };
   const salvaVoci = async tutte => {
     setLavoro(true); setErr('');
     try { for (const v of tutte) await ricorda(v); await salvaPasto(data, tutte.map(({ _voce, ...r }) => r)); aggiorna(); onClose(); }
@@ -544,6 +576,7 @@ function PastoSheet({ pasto, data, onClose, aggiorna, iniziale, fotoIniziale }) 
     ${voci.length ? html`<div class="nel-pasto"><p><b>Nel pasto:</b> ${voci.map(v => v.descrizione).join(' + ')} · <b>${M.kcalTxt(voci.reduce((s, v) => s + v.kcal, 0))} kcal</b></p>
       <button class="primario largo" disabled=${lavoro} onClick=${() => salvaVoci(voci)}>${lavoro ? 'Salvo…' : 'Salva il pasto'}</button></div>` : null}
     <form class="azioni" onSubmit=${cercaEtichette}><input type="search" inputmode="search" placeholder="Cosa hai mangiato? (o codice a barre)" value=${q} onInput=${e => { setQ(e.target.value); setOff(null); }} aria-label="Cerca un cibo" /></form>
+    <label class="secondario largo tasto-codice"><input type="file" accept="image/*" capture="environment" onChange=${inquadra} /><${Ico} n="codice" /> ${cercando ? 'Leggo il codice…' : 'Inquadra il codice a barre'}</label>
     ${mieiVisti.length ? html`<p class="piccolo">${filtro ? 'Tra i tuoi' : 'I tuoi più usati'}</p><ul class="voci">${mieiVisti.map(x => voceRiga(x, html`<button class="x-piccola" aria-label="Togli ${x.nome}" onClick=${e => togli(e, x)}>×</button>`))}</ul>` : null}
     ${filtro.length >= 2 ? (off ? (off.length ? html`<p class="piccolo">Dalle etichette (Open Food Facts)</p><ul class="voci">${off.map(x => voceRiga(x))}</ul>` : html`<p class="piccolo">Nelle etichette non c'è.</p>`)
       : html`<button class="secondario largo" disabled=${cercando} onClick=${cercaEtichette}>${cercando ? 'Cerco…' : `🔎 Cerca «${q.trim()}» nelle etichette`}</button>`) : null}
@@ -594,7 +627,7 @@ function Oggi({ tick, aggiorna, greg, setGreg }) {
   const g = n.giorno || {};
   // 17/11: tre tasti; si somma ai centesimi (al decimo 0,25 diventava 0,3 e due bicchieri facevano 0,6)
   const acqua = async l => { await aggiornaGiorno(data, { acquaL: Math.round(((g.acquaL || 0) + l) * 100) / 100 }); aggiorna(); };
-  const salvaVoceRapida = async v => { setSheet({ tipo: 'salvo' }); await setDoc(doc(db, 'preferiti', v._voce.id), { usi: (v._voce.usi || 0) + 1 }, { merge: true }); const { _voce, ...r } = v; await salvaPasto(data, [r]); setSheet(null); aggiorna(); };
+  const salvaVoceRapida = async v => { setSheet({ tipo: 'salvo' }); await setDoc(doc(db, 'preferiti', v._voce.id), { usi: (v._voce.usi || 0) + 1, ultimo: Date.now() }, { merge: true }); const { _voce, ...r } = v; await salvaPasto(data, [r]); setSheet(null); aggiorna(); };
   return html`
     <${Budget} n=${n} s=${s} onSfida=${() => setSheet({ tipo: 'sfida' })} />
     ${greg && !greg.aperto ? html`<button class="banner-greg" onClick=${() => setGreg(x => ({ ...x, aperto: true }))}>${greg.stato === 'attesa' ? 'Greg sta guardando la foto…' : 'Greg ha risposto · apri'}</button>` : null}
@@ -758,7 +791,7 @@ function Altro({ tick, aggiorna }) {
       <button class="secondario largo" onClick=${importa}>Importali nel database</button></section>` : null}
     <section class="card"><h3>Come funziona</h3><ul class="conti">
       <li><b>📷 Fotografa</b>: piatto, vetrina o menu vanno a <b>Greg</b> (circa 1–2 centesimi a foto). Il piatto stimato resta tra i tuoi con la fotina: la volta dopo lo tocchi e non paghi.</li>
-      <li><b>🔎 Cerca o scrivi</b> è gratis: prima i tuoi cibi, poi le <b>etichette</b> (Open Food Facts, per nome o codice a barre). C'è anche Gemini incollato, gratuito.</li>
+      <li><b>🔎 Cerca o scrivi</b> è gratis: prima i tuoi cibi, poi le <b>etichette</b> (Open Food Facts, per nome o codice a barre: lo scrivi o lo <b>inquadri</b>). C'è anche Gemini incollato, gratuito.</li>
       <li>Tutti i conti li fa il codice: obiettivo mai sotto il basale, l'attività non si somma al budget, ritaratura il sabato sul calo reale.</li>
       <li>Passi e calorie attive arrivano la sera col Comando rapido dell'iPhone.</li>
       <li>Per una verifica completa chiedi a <b>Greg</b> in AZienda: legge questo stesso diario.</li></ul></section>
