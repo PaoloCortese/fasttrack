@@ -61,6 +61,31 @@ function Login() {
     </form><p class="nota">Si entra una volta per dispositivo.</p></main>`;
 }
 
+// ---------- icone (17/11, web designer): SVG a linea dello stesso set, Lucide (licenza ISC), inline, sempre con etichetta ----------
+const PERCORSI = {
+  oggi: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  diario: '<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
+  peso: '<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10M12 3v18M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
+  greg: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  altro: '<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  rullino: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>',
+  cerca: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  luna: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
+  posate: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+  bicchiere: '<path d="M15.2 22H8.8a2 2 0 0 1-2-1.79L5 3h14l-1.81 17.21A2 2 0 0 1 15.2 22Z"/><path d="M6 12a5 5 0 0 1 6 0 5 5 0 0 0 6 0"/>',
+  goccia: '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+  bottiglia: '<path d="M8 2h8M9 2v2.789a4 4 0 0 1-.672 2.219l-.656.984A4 4 0 0 0 7 10.212V20a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-9.789a4 4 0 0 0-.672-2.219l-.656-.984A4 4 0 0 1 15 4.788V2"/><path d="M7 15a6.47 6.47 0 0 1 5 0 6.47 6.47 0 0 0 5 0"/>',
+  allarme: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4m0 4h.01"/>',
+  info: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5M9 18h6m-5 4h4"/>',
+  ok: '<path d="M20 6 9 17l-5-5"/>',
+  attivita: '<path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/>',
+  avanti: '<path d="m9 18 6-6-6-6"/>',
+};
+const Ico = ({ n, c = '' }) => html`<svg class=${'ico ' + c} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: PERCORSI[n] }}></svg>`;
+function useAdesso(ms = 30000) { const [a, setA] = useState(Date.now()); useEffect(() => { const t = setInterval(() => setA(Date.now()), ms); return () => clearInterval(t); }, []); return a; }
+const durata = ore => `${Math.floor(ore)} h ${String(Math.floor((ore % 1) * 60)).padStart(2, '0')}`;
+
 // ---------- OGGI ----------
 function Pallino({ x }) {
   const segno = { verde: '✓', giallo: '!', rosso: '✕', vuoto: '–', futuro: '', oggi: '' }[x.stato];
@@ -70,9 +95,9 @@ function Pallino({ x }) {
 function rigaSfida(s) {
   if (s.sabato) return 'Oggi è sabato: pesati nella scheda Peso, il bilancio parte da solo.';
   if (s.recupero) return `−${M.kcalTxt(s.recupero.debito)} da recuperare · ${s.recupero.giorni > 1 ? `oggi e nei prossimi ${s.recupero.giorni - 1} giorni` : 'oggi'} ${M.kcalTxt(s.recupero.obiettivoGiorno)} kcal · ${s.recupero.minuti} min a piedi aiutano la bilancia`;
-  if (s.saldo > 0) return `+${M.kcalTxt(s.saldo)} da parte${s.fila >= 2 ? ` · ${s.fila} giorni di fila nel budget` : ''}`;
+  if (s.fila >= 2) return `${s.fila} giorni di fila nel budget`;
   if (s.contati === 0) return 'Si parte: ogni giornata registrata mette o toglie dal salvadanaio.';
-  return 'In pari con l\'obiettivo';
+  return null; // il salvadanaio è già nella riga dei numeri (17/11: niente doppioni)
 }
 function Budget({ n, s, onSfida }) {
   const pct = Math.min(100, n.mangiato / n.obiettivo * 100); const oltre = n.residuo < 0;
@@ -81,11 +106,11 @@ function Budget({ n, s, onSfida }) {
     <p class="etichetta">${oltre ? 'Oltre il budget' : 'Restano'}</p>
     <p class="grande ${oltre ? 'rosso' : ''}">${M.kcalTxt(Math.abs(n.residuo))} <small>kcal</small></p>
     <div class="barra ${oltre ? 'rossa' : ''}"><div style=${`width:${pct}%`}></div></div>
-    <div class="tre"><div><b>${M.kcalTxt(n.mangiato)}</b><span>mangiate</span></div><div><b>${M.kcalTxt(n.obiettivo)}</b><span>obiettivo${n.recuperoOggi ? html`<br/>(${M.kcalTxt(n.obiettivoBase)} − ${n.recuperoOggi} recupero)` : ''}</span></div><div><b>${s ? (s.saldo > 0 ? '+' : s.saldo < 0 ? '−' : '') + M.kcalTxt(Math.abs(s.saldo)) : '—'}</b><span>settimana</span></div></div>
+    <p class="numeri"><span><b>${M.kcalTxt(n.mangiato)}</b> mangiate</span><span>obiettivo <b>${M.kcalTxt(n.obiettivo)}</b>${n.recuperoOggi ? ` (−${n.recuperoOggi})` : ''}</span>${s ? html`<span><b class=${s.saldo < 0 ? 'rosso' : s.saldo > 0 ? 'verde' : ''}>${(s.saldo > 0 ? '+' : s.saldo < 0 ? '−' : '') + M.kcalTxt(Math.abs(s.saldo))}</b> settimana</span>` : null}</p>
     ${s ? html`<button class="fascia-sfida" onClick=${onSfida} aria-label="Apri la sfida della settimana">
-      <span class="riga"><b>Sfida · sabato ${s.sabatoPesata.slice(8, 10)}${s.pesoObiettivo ? ` → ${M.kgTxt(s.pesoObiettivo)} kg` : ''}</b><span aria-hidden="true">›</span></span>
+      <span class="riga"><b>Sfida · sabato ${s.sabatoPesata.slice(8, 10)}${s.pesoObiettivo ? ` → ${M.kgTxt(s.pesoObiettivo)} kg` : ''}</b><${Ico} n="avanti" c="piccola" /></span>
       <span class="pallini">${s.pallini.map(x => html`<${Pallino} x=${x} />`)}</span>
-      <span class="riga-sfida">${rigaSfida(s)}</span>
+      ${rigaSfida(s) ? html`<span class="riga-sfida">${rigaSfida(s)}</span>` : null}
       ${s.previsione ? html`<span class="riga-sfida">Se continui così: sabato <b>${M.kgTxt(s.previsione)} kg</b></span>` : null}
     </button>` : null}
     <button class="link" onClick=${() => setInfo(!info)} aria-expanded=${info}>${info ? 'Nascondi i conti' : 'Da dove vengono i numeri'}</button>
@@ -134,12 +159,12 @@ function Digiuno({ stato, aggiorna }) {
   if (stato?.inizio) {
     const ore = (adesso - stato.inizio) / 3600000; const pct = Math.min(100, ore / M.ORE_DIGIUNO * 100);
     const apre = new Date(stato.inizio + M.ORE_DIGIUNO * 3600000);
-    return html`<section class="card"><div class="riga"><h3>🌙 Digiuno</h3><span class="pill ${ore >= M.ORE_DIGIUNO ? 'verde' : ''}">${Math.floor(ore)} h ${String(Math.floor((ore % 1) * 60)).padStart(2, '0')} min</span></div>
+    return html`<section class="card" id="digiuno"><div class="riga"><h3 class="con-ico"><${Ico} n="luna" /> Digiuno</h3><span class="pill ${ore >= M.ORE_DIGIUNO ? 'verde' : ''}">${durata(ore)} min</span></div>
       <div class="barra"><div style=${`width:${pct}%`}></div></div>
       <p class="piccolo">Iniziato alle ${M.oraRoma(new Date(stato.inizio))} · 16 ore alle <b>${M.oraRoma(apre)}</b>. Si chiude da solo al primo pasto che registri.</p>
       <div class="azioni">${orario}<button class="primario" onClick=${apri}>${chiediOra ? 'Aperta a quest\'ora' : 'Apro la finestra ora'}</button>${linkOra}</div></section>`;
   }
-  return html`<section class="card"><div class="riga"><h3>🍽 Finestra aperta</h3>${stato?.apertaAlle ? html`<span class="pill">dalle ${M.oraRoma(new Date(stato.apertaAlle))}</span>` : null}</div>
+  return html`<section class="card" id="digiuno"><div class="riga"><h3 class="con-ico"><${Ico} n="posate" /> Finestra aperta</h3>${stato?.apertaAlle ? html`<span class="pill">dalle ${M.oraRoma(new Date(stato.apertaAlle))}</span>` : null}</div>
     <p class="piccolo">Quando hai finito di mangiare, fallo partire. Se te ne dimentichi, domattina parte da solo dall'ultimo pasto.</p>
     <div class="azioni">${orario}<button class="primario" onClick=${inizia}>${chiediOra ? 'Iniziato a quest\'ora' : 'Inizia il digiuno ora'}</button>${linkOra}</div></section>`;
 }
@@ -148,8 +173,9 @@ function Consiglio({ lista }) { // uno solo alla volta: il più utile
   if (!lista.length) return null;
   const ordine = { allarme: 0, digiuno: 1, info: 2, ok: 3, attivita: 4 };
   const c = [...lista].sort((a, b) => (ordine[a.tipo] ?? 9) - (ordine[b.tipo] ?? 9))[0];
-  const icona = { digiuno: '⏱', allarme: '⚠️', ok: '✅', info: '💡', attivita: '🚶' };
-  return html`<ul class="consigli solo"><li class=${c.tipo}><span aria-hidden="true">${icona[c.tipo] || '•'}</span><p>${c.testo}${c.azione ? html`<br /><button class="secondario" onClick=${c.azione.fai}>${c.azione.etichetta}</button>` : null}</p></li></ul>`;
+  const icona = { digiuno: 'luna', allarme: 'allarme', ok: 'ok', info: 'info', attivita: 'attivita' };
+  const azioni = c.azioni || (c.azione ? [c.azione] : []);
+  return html`<ul class="consigli solo"><li class=${c.tipo}><${Ico} n=${icona[c.tipo] || 'info'} /><div><p>${c.testo}</p>${azioni.length ? html`<div class="azioni-consiglio">${azioni.map((a, i) => html`<button class=${i ? 'link' : 'secondario'} onClick=${a.fai}>${a.etichetta}</button>`)}</div>` : null}</div></li></ul>`;
 }
 
 // ---------- dove si prendono le calorie ----------
@@ -384,22 +410,41 @@ async function avviaGreg(setGreg, foto, tipo) {
   finally { gregInCorso = false; }
 }
 
-function BloccoFoto({ setGreg, onVoce, onCerca, tick }) {
-  const [frequenti, setFrequenti] = useState([]);
-  useEffect(() => { getDocs(collection(db, 'preferiti')).then(s => setFrequenti(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.mini).sort((a, b) => (b.usi || 0) - (a.usi || 0)).slice(0, 6))).catch(() => {}); }, [tick]);
+// 17/11 (facilitatore): i tasti foto stanno sopra la piega da soli; la riga «piatto, vetrina, menu…» è tolta (Paolo la sa).
+function TastiFoto({ setGreg }) {
   const scatto = async e => {
     const file = e.target.files && e.target.files[0]; e.target.value = ''; if (!file) return;
     const foto = await rimpicciolisci(file, 1024, 0.8); if (!foto) { alert('La foto non si legge.'); return; }
     avviaGreg(setGreg, foto, '');
   };
-  return html`<section class="card blocco-foto">
-    <div class="tasti-foto">
-      <label class="tasto-foto"><input type="file" accept="image/*" capture="environment" onChange=${scatto} /><span aria-hidden="true">📷</span> Fotografa</label>
-      <label class="tasto-rullino"><input type="file" accept="image/*" onChange=${scatto} /><span aria-hidden="true">🖼</span> Rullino</label>
-    </div>
-    <p class="sotto-foto">piatto, vetrina, menu, screenshot dei passi o bilancia · Greg ≈ 1–2 cent</p>
-    ${frequenti.length ? html`<p class="piccolo">I tuoi piatti · gratis</p><div class="fotine">${frequenti.map(x => html`<button onClick=${() => onVoce(x)}><img src=${miniUrl(x.mini)} alt="" /><span>${x.nome.length > 22 ? x.nome.slice(0, 21) + '…' : x.nome}</span><small>${M.kcalTxt(x.kcalPezzo ?? x.kcal100 ?? 0)}</small></button>`)}</div>` : null}
-    <button class="link" onClick=${onCerca}>🔎 Cerca o scrivi</button>
+  return html`<div class="tasti-foto">
+      <label class="tasto-foto"><input type="file" accept="image/*" capture="environment" onChange=${scatto} /><${Ico} n="camera" /> Fotografa</label>
+      <label class="tasto-rullino"><input type="file" accept="image/*" onChange=${scatto} /><${Ico} n="rullino" /> Rullino</label>
+    </div>`;
+}
+function Piatti({ onVoce, onCerca, tick }) {
+  const [frequenti, setFrequenti] = useState([]);
+  useEffect(() => { getDocs(collection(db, 'preferiti')).then(s => setFrequenti(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(x => x.mini).sort((a, b) => (b.usi || 0) - (a.usi || 0)).slice(0, 6))).catch(() => {}); }, [tick]);
+  return html`<section class="card">
+    ${frequenti.length ? html`<h3>I tuoi piatti <small class="nota-titolo">gratis</small></h3><div class="fotine">${frequenti.map(x => html`<button onClick=${() => onVoce(x)}><img src=${miniUrl(x.mini)} alt="" /><span>${x.nome.length > 22 ? x.nome.slice(0, 21) + '…' : x.nome}</span><small>${M.kcalTxt(x.kcalPezzo ?? x.kcal100 ?? 0)}</small></button>`)}</div>` : null}
+    <button class="link con-ico" onClick=${onCerca}><${Ico} n="cerca" /> Cerca o scrivi</button>
+  </section>`;
+}
+// 17/11 (facilitatore): digiuno e acqua sopra la piega, in una striscia; il digiuno completo resta più giù.
+function Striscia({ dig, acquaL, acqua }) {
+  const adesso = useAdesso();
+  let riga;
+  if (dig?.inizio) {
+    const ore = (adesso - dig.inizio) / 3600000; const fatto = ore >= M.ORE_DIGIUNO;
+    const apre = new Date(dig.inizio + M.ORE_DIGIUNO * 3600000);
+    riga = html`<${Ico} n="luna" /><span class="cosa"><b>${durata(ore)}</b> di digiuno</span><span class="quando ${fatto ? 'verde' : ''}">${fatto ? '16 h fatte' : `apre alle ${M.oraRoma(apre)}`}</span>
+      <span class="barra sottile"><span style=${`width:${Math.min(100, ore / M.ORE_DIGIUNO * 100)}%`}></span></span>`;
+  } else riga = html`<${Ico} n="posate" /><span class="cosa">Finestra aperta${dig?.apertaAlle ? ` dalle ${M.oraRoma(new Date(dig.apertaAlle))}` : ''}</span><span class="quando">inizia il digiuno</span>`;
+  const vai = () => document.getElementById('digiuno')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return html`<section class="card striscia">
+    <button class="riga-digiuno" onClick=${vai}>${riga}</button>
+    <div class="riga-acqua"><span class="cosa con-ico"><${Ico} n="goccia" /> Acqua <b>${String(acquaL || 0).replace('.', ',')} L</b></span></div>
+    <div class="azioni acqua">${[[0.25, 'bicchiere', '+0,25', 'bicchiere'], [0.5, 'goccia', '+0,5', 'bottiglietta'], [1, 'bottiglia', '+1 L', 'bottiglia']].map(([l, i, t, d]) => html`<button class="secondario" onClick=${() => acqua(l)}><span class="tasto-acqua"><${Ico} n=${i} /> ${t}</span><small>${d}</small></button>`)}</div>
   </section>`;
 }
 
@@ -541,35 +586,38 @@ function Oggi({ tick, aggiorna, greg, setGreg }) {
   const ob = s?.recupero ? s.recupero.obiettivoGiorno : n0.obiettivo;
   const n = { ...n0, obiettivoBase: n0.obiettivo, obiettivo: ob, residuo: ob - n0.mangiato, recuperoOggi: n0.obiettivo - ob };
   const ieri = s?.pallini.find(x => x.data === M.addGiorni(data, -1));
-  const consigli = M.consigli(n, dig);
+  const consigli = M.consigli(n, dig).filter(c => c.tipo !== 'digiuno'); // il digiuno sta già nella striscia
   // 17/11: poche calorie non vuol dire per forza un pasto dimenticato → si chiede, e «era tutto» la fa contare
-  if (ieri && ieri.stato === 'vuoto' && ieri.kcal > 0) consigli.unshift({ tipo: 'allarme', testo: `Ieri risultano ${M.kcalTxt(ieri.kcal)} kcal: è tutto? Se manca un pasto aggiungilo da Diario (su ieri, non dai tuoi piatti qui sopra, che vanno su oggi).`,
-    azione: { etichetta: '✓ Sì, era tutto', fai: async () => { await aggiornaGiorno(ieri.data, { completa: true }); aggiorna(); } } });
+  if (ieri && ieri.stato === 'vuoto' && ieri.kcal > 0) consigli.unshift({ tipo: 'allarme', testo: `Ieri solo ${M.kcalTxt(ieri.kcal)} kcal: era tutto?`,
+    azioni: [{ etichetta: 'Sì, era tutto', fai: async () => { await aggiornaGiorno(ieri.data, { completa: true }); aggiorna(); } },
+             { etichetta: 'Manca un pasto', fai: () => setSheet({ tipo: 'giorno', data: ieri.data }) }] });
   const g = n.giorno || {};
   // 17/11: tre tasti; si somma ai centesimi (al decimo 0,25 diventava 0,3 e due bicchieri facevano 0,6)
   const acqua = async l => { await aggiornaGiorno(data, { acquaL: Math.round(((g.acquaL || 0) + l) * 100) / 100 }); aggiorna(); };
   const salvaVoceRapida = async v => { setSheet({ tipo: 'salvo' }); await setDoc(doc(db, 'preferiti', v._voce.id), { usi: (v._voce.usi || 0) + 1 }, { merge: true }); const { _voce, ...r } = v; await salvaPasto(data, [r]); setSheet(null); aggiorna(); };
   return html`
     <${Budget} n=${n} s=${s} onSfida=${() => setSheet({ tipo: 'sfida' })} />
-    ${greg && !greg.aperto ? html`<button class="banner-greg" onClick=${() => setGreg(x => ({ ...x, aperto: true }))}>${greg.stato === 'attesa' ? '📷 Greg sta guardando la foto…' : '📷 Greg ha risposto · apri'}</button>` : null}
-    <${BloccoFoto} setGreg=${setGreg} tick=${tick} onVoce=${x => setSheet({ tipo: 'voce', voce: x })} onCerca=${() => setSheet({ tipo: 'pasto' })} />
+    ${greg && !greg.aperto ? html`<button class="banner-greg" onClick=${() => setGreg(x => ({ ...x, aperto: true }))}>${greg.stato === 'attesa' ? 'Greg sta guardando la foto…' : 'Greg ha risposto · apri'}</button>` : null}
+    <${TastiFoto} setGreg=${setGreg} />
+    <${Striscia} dig=${dig} acquaL=${g.acquaL} acqua=${acqua} />
     <${Consiglio} lista=${consigli} />
+    <${Piatti} tick=${tick} onVoce=${x => setSheet({ tipo: 'voce', voce: x })} onCerca=${() => setSheet({ tipo: 'pasto' })} />
     <section class="card"><h3>Pasti di oggi</h3>
       ${n.pasti.length ? html`<ul class="pasti">${n.pasti.map(p => html`<li><button onClick=${() => setSheet({ tipo: 'pasto', pasto: p })}>
-          <span class="ora">${p.ora || ''}</span><span class="desc">${p.descrizione}${p.foto?.length ? ' 📷' : ''}${p.aderenza === 'sgarro' ? html` <em class="sgarro">sgarro</em>` : ''}</span><b>${M.kcalTxt(p.kcal)}</b></button></li>`)}</ul>`
+          <span class="ora">${p.ora || ''}</span><span class="desc">${p.descrizione}${p.aderenza === 'sgarro' ? html` <em class="sgarro">sgarro</em>` : ''}</span><b>${M.kcalTxt(p.kcal)}</b></button></li>`)}</ul>`
         : html`<p class="piccolo">Ancora nessun pasto: fotografa o tocca un tuo piatto qui sopra.</p>`}
     </section>
     <${Digiuno} stato=${dig} aggiorna=${aggiorna} />
     <section class="card"><div class="riga"><h3>Attività</h3><button class="link" onClick=${() => setSheet({ tipo: 'attivita' })}>Modifica</button></div>
-      <div class="tre"><div><b>${g.passi != null ? M.kcalTxt(g.passi) : '—'}</b><span>passi</span></div><div><b>${g.kcalAttive != null ? M.kcalTxt(g.kcalAttive) : '—'}</b><span>kcal attive</span></div><div><b>${g.acquaL != null ? String(g.acquaL).replace('.', ',') : '0'} L</b><span>acqua</span></div></div>
-      <div class="azioni acqua">${[[0.25, '🥛', '+0,25', 'bicchiere'], [0.5, '💧', '+0,5', 'bottiglietta'], [1, '🍶', '+1 L', 'bottiglia']].map(([l, i, t, d]) => html`<button class="secondario" onClick=${() => acqua(l)}>${i} ${t}<small>${d}</small></button>`)}</div>
+      <div class="tre due"><div><b>${g.passi != null ? M.kcalTxt(g.passi) : '—'}</b><span>passi</span></div><div><b>${g.kcalAttive != null ? M.kcalTxt(g.kcalAttive) : '—'}</b><span>kcal attive</span></div></div>
     </section>
     ${greg && greg.aperto ? html`<${GregSheet} greg=${greg} setGreg=${setGreg} n=${n} aggiorna=${aggiorna} onCorreggi=${(v, foto) => setSheet({ tipo: 'pasto', iniziale: v || { descrizione: '', kcal: '', fonte: 'a_mano' }, foto })} />` : null}
     ${sheet?.tipo === 'voce' ? html`<${Sheet} titolo="Il tuo piatto" onClose=${() => setSheet(null)}><${Quantita} voce=${sheet.voce} onSalva=${salvaVoceRapida} onAnnulla=${() => setSheet(null)} /><//>` : null}
     ${sheet?.tipo === 'salvo' ? html`<p class="caricamento">Salvo…</p>` : null}
     ${sheet?.tipo === 'pasto' ? html`<${PastoSheet} pasto=${sheet.pasto} iniziale=${sheet.iniziale} fotoIniziale=${sheet.foto} data=${data} onClose=${() => setSheet(null)} aggiorna=${aggiorna} />` : null}
     ${sheet?.tipo === 'attivita' ? html`<${AttivitaSheet} data=${data} g=${n.giorno} onClose=${() => setSheet(null)} aggiorna=${aggiorna} />` : null}
-    ${sheet?.tipo === 'sfida' && s ? html`<${SfidaSheet} s=${s} onClose=${() => setSheet(null)} />` : null}`;
+    ${sheet?.tipo === 'sfida' && s ? html`<${SfidaSheet} s=${s} onClose=${() => setSheet(null)} />` : null}
+    ${sheet?.tipo === 'giorno' ? html`<${GiornoSheet} data=${sheet.data} onClose=${() => setSheet(null)} aggiorna=${aggiorna} />` : null}`;
 }
 
 // ---------- DIARIO ----------
@@ -603,7 +651,7 @@ function Diario({ tick, aggiorna }) {
         <span class="giorno">${M.dataBreve(r.data)}</span>
         <span class="mini-barra ${sopra ? 'rossa' : ''}"><span style=${`width:${pct}%`}></span></span>
         <span class="kcal">${r.kcal ? M.kcalTxt(r.kcal) : '—'}</span>
-        <span class="extra">${r.passi != null ? `${M.kcalTxt(r.passi)} passi` : ''}${r.pesata ? ` · ${M.kgTxt(r.pesata)} kg` : ''}${r.soloStorico ? ' · stima Gemini' : ''}</span></button></li>`;
+        <span class="extra">${[r.passi != null ? `${M.kcalTxt(r.passi)} passi` : '', r.pesata ? `${M.kgTxt(r.pesata)} kg` : '', r.soloStorico ? 'stima Gemini' : ''].filter(Boolean).join(' · ')}</span></button></li>`;
     })}</ul>
     ${aperto ? html`<${GiornoSheet} data=${aperto} onClose=${() => setAperto(null)} aggiorna=${aggiorna} />` : null}`;
 }
@@ -749,7 +797,7 @@ function GregChat({ onClose }) {
   };
   return html`<div class="velo" onClick=${e => e.target === e.currentTarget && onClose()}>
     <div class="sheet chat" role="dialog" aria-modal="true" aria-label="Chat con Greg">
-      <div class="sheet-testa"><h2>💬 Greg <small>il tuo tutor</small></h2><button class="x" aria-label="Chiudi" onClick=${onClose}>×</button></div>
+      <div class="sheet-testa"><h2 class="con-ico"><${Ico} n="greg" /> Greg <small>il tuo tutor</small></h2><button class="x" aria-label="Chiudi" onClick=${onClose}>×</button></div>
       <div class="chat-corpo">
         ${msgs === null ? html`<p class="caricamento">Carico la chat…</p>` : !msgs.length ? html`<p class="piccolo">Chiedimi come va la settimana, cosa mangiare al prossimo pasto, come rientrare dopo uno sgarro, o raccontami come stai. Leggo i tuoi numeri di Fast Track; referti e terapie li vedo sul Mac.</p>` : null}
         ${(msgs || []).map(m => html`<div class=${'bolla ' + (m.ruolo === 'paolo' ? 'mia' : 'sua')}>${m.ruolo === 'paolo' ? html`<p>${m.testo}</p>` : html`<div dangerouslySetInnerHTML=${{ __html: mdLite(m.testo) }}></div>`}${m.foto ? html`<small>📷 ×${m.foto}</small>` : null}</div>`)}
@@ -765,7 +813,7 @@ function GregChat({ onClose }) {
 }
 
 // ---------- l'app ----------
-const SCHEDE = [['oggi', 'Oggi', '◎'], ['diario', 'Diario', '☰'], ['peso', 'Peso', '⚖'], ['altro', 'Altro', '⋯']];
+const SCHEDE = [['oggi', 'Oggi'], ['diario', 'Diario'], ['greg', 'Greg'], ['peso', 'Peso'], ['altro', 'Altro']];
 function App() {
   const [utente, setUtente] = useState(undefined);
   const [scheda, setScheda] = useState(() => { try { return localStorage.getItem('ft2_scheda') || 'oggi'; } catch { return 'oggi'; } });
@@ -780,10 +828,13 @@ function App() {
   if (!utente) return html`<${Login} />`;
   const Vista = { oggi: Oggi, diario: Diario, peso: Peso, altro: Altro }[scheda];
   const titolo = { oggi: new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Rome' }), diario: 'Diario', peso: 'Peso', altro: 'Altro' }[scheda];
-  return html`<header class="testa"><h1>${titolo}</h1><button class="tasto-greg" onClick=${() => setChat(true)} aria-label="Parla con Greg">💬 Greg</button></header>
+  return html`<header class="testa"><h1>${titolo}</h1></header>
     ${chat ? html`<${GregChat} onClose=${() => { setChat(false); aggiorna(); }} />` : null}
     <main class="contenuto"><${Vista} tick=${tick} aggiorna=${aggiorna} greg=${greg} setGreg=${setGreg} /></main>
-    <nav class="schede" aria-label="Sezioni">${SCHEDE.map(([k, t, i]) => html`<button class=${scheda === k ? 'attiva' : ''} aria-current=${scheda === k ? 'page' : null} onClick=${() => setScheda(k)}><span aria-hidden="true">${i}</span>${t}</button>`)}</nav>`;
+    <nav class="schede" aria-label="Sezioni">${SCHEDE.map(([k, t]) => {
+      const attiva = k === 'greg' ? chat : !chat && scheda === k;
+      return html`<button class=${attiva ? 'attiva' : ''} aria-current=${attiva ? 'page' : null} onClick=${() => k === 'greg' ? setChat(true) : (setChat(false), setScheda(k))}><span class="ico-pillola"><${Ico} n=${k} /></span>${t}</button>`;
+    })}</nav>`;
 }
 
 render(html`<${App} />`, document.getElementById('app'));
