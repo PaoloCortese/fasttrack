@@ -149,7 +149,7 @@ function Consiglio({ lista }) { // uno solo alla volta: il più utile
   const ordine = { allarme: 0, digiuno: 1, info: 2, ok: 3, attivita: 4 };
   const c = [...lista].sort((a, b) => (ordine[a.tipo] ?? 9) - (ordine[b.tipo] ?? 9))[0];
   const icona = { digiuno: '⏱', allarme: '⚠️', ok: '✅', info: '💡', attivita: '🚶' };
-  return html`<ul class="consigli solo"><li class=${c.tipo}><span aria-hidden="true">${icona[c.tipo] || '•'}</span><p>${c.testo}</p></li></ul>`;
+  return html`<ul class="consigli solo"><li class=${c.tipo}><span aria-hidden="true">${icona[c.tipo] || '•'}</span><p>${c.testo}${c.azione ? html`<br /><button class="secondario" onClick=${c.azione.fai}>${c.azione.etichetta}</button>` : null}</p></li></ul>`;
 }
 
 // ---------- dove si prendono le calorie ----------
@@ -535,7 +535,9 @@ function Oggi({ tick, aggiorna, greg, setGreg }) {
   const n = { ...n0, obiettivoBase: n0.obiettivo, obiettivo: ob, residuo: ob - n0.mangiato, recuperoOggi: n0.obiettivo - ob };
   const ieri = s?.pallini.find(x => x.data === M.addGiorni(data, -1));
   const consigli = M.consigli(n, dig);
-  if (ieri && ieri.stato === 'vuoto' && ieri.kcal > 0) consigli.unshift({ tipo: 'allarme', testo: `Ieri risultano solo ${M.kcalTxt(ieri.kcal)} kcal: manca un pasto? Aggiungilo da Diario, sennò la giornata non conta.` });
+  // 17/11: poche calorie non vuol dire per forza un pasto dimenticato → si chiede, e «era tutto» la fa contare
+  if (ieri && ieri.stato === 'vuoto' && ieri.kcal > 0) consigli.unshift({ tipo: 'allarme', testo: `Ieri risultano ${M.kcalTxt(ieri.kcal)} kcal: è tutto? Se manca un pasto aggiungilo da Diario (su ieri, non dai tuoi piatti qui sopra, che vanno su oggi).`,
+    azione: { etichetta: '✓ Sì, era tutto', fai: async () => { await aggiornaGiorno(ieri.data, { completa: true }); aggiorna(); } } });
   const g = n.giorno || {};
   const acqua = async () => { await aggiornaGiorno(data, { acquaL: M.r1((g.acquaL || 0) + 0.25) }); aggiorna(); };
   const salvaVoceRapida = async v => { setSheet({ tipo: 'salvo' }); await setDoc(doc(db, 'preferiti', v._voce.id), { usi: (v._voce.usi || 0) + 1 }, { merge: true }); const { _voce, ...r } = v; await salvaPasto(data, [r]); setSheet(null); aggiorna(); };

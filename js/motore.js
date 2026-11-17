@@ -173,7 +173,7 @@ export async function diario(a, n) {
     const g = gS.docs.find(x => x.id === d)?.data() || null;
     const w = wS.docs.find(x => x.data().data === d)?.data() || null;
     out.push({ data: d, kcal: r0(pp.reduce((s, x) => s + (Number(x.kcal) || 0), 0)), pasti: pp.length, sgarri: pp.filter(x => x.aderenza === 'sgarro').length, soloStorico: pp.length > 0 && pp.every(x => x.fonte === 'gemini_storico'),
-      passi: g?.passi ?? null, kcalAttive: g?.kcalAttive ?? null, acquaL: g?.acquaL ?? null, chiusa: !!g?.chiusa, esito: g?.esito || null, pesata: w?.kg ?? null });
+      passi: g?.passi ?? null, kcalAttive: g?.kcalAttive ?? null, acquaL: g?.acquaL ?? null, chiusa: !!g?.chiusa, completa: !!g?.completa, esito: g?.esito || null, pesata: w?.kg ?? null });
   }
   return out;
 }
@@ -181,10 +181,12 @@ export async function diario(a, n) {
 // ---------- quando una giornata CONTA (regola del 15/11, dal facilitatore «zero attriti») ----------
 // Non serve più chiuderla: conta da sola quando è passata, se è credibile, cioè con almeno basale − 300 kcal registrate
 // (sotto, probabilmente manca un pasto: pallino grigio, fuori dal salvadanaio e dalla ritaratura). Lo storico di Gemini non conta.
+// Dal 17/11 Paolo può confermare «era tutto» (giorni/{data}.completa = true): allora conta anche sotto la soglia.
 export const MARGINE_CREDIBILE = 300;
 export function giornoConta(g, oggi, basale) {
   if (!g || g.soloStorico) return false;
   if (g.data >= oggi && !g.chiusa) return false;
+  if (g.completa && g.kcal > 0) return true;   // 17/11: «era tutto» confermato da Paolo, anche se sotto la soglia
   return g.kcal >= basale - MARGINE_CREDIBILE;
 }
 
